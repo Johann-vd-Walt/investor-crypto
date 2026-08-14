@@ -42,8 +42,27 @@ say "Applying database migrations"
 cd "$APP_DIR/backend"
 sudo -u "$APP_USER" "$VENV/bin/alembic" upgrade head | sed 's/^/  /'
 
-say "Seeding the crypto asset list (idempotent)"
-sudo -u "$APP_USER" "$PY" -m app.ingestion.seed_securities | sed 's/^/  /'
+# The seeder WIPES all domain data (prices, paper trades, signals, watchlist)
+# and reseeds — so run it ONLY when the universe is empty (first deploy). On
+# updates this is skipped, so your data survives. To change the asset list
+# later, run the seeder by hand and accept that it clears everything.
+say "Seeding the crypto asset list (first run only — the seeder is destructive)"
+NEED_SEED="$(sudo -u "$APP_USER" "$PY" - <<'PY'
+from app.db.session import SessionLocal
+from sqlalchemy import text
+db = SessionLocal()
+try:
+    n = db.execute(text("SELECT COUNT(*) FROM securities")).scalar() or 0
+finally:
+    db.close()
+print("yes" if n == 0 else "no")
+PY
+)"
+if [[ "$NEED_SEED" == "yes" ]]; then
+  sudo -u "$APP_USER" "$PY" -m app.ingestion.seed_securities | sed 's/^/  /'
+else
+  echo "  securities already present — skipping (seeder wipes data; re-seed by hand only if the asset list changes)"
+fi
 
 # First-run price back-fill only. Re-running deploy will NOT re-ingest years of
 # data every time — the scheduler keeps prices fresh after the first load.
