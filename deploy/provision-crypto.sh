@@ -167,6 +167,16 @@ systemctl daemon-reload
 systemctl enable cryptotrader >/dev/null
 echo "  unit installed and enabled (not started — run deploy-crypto.sh first)"
 
+# ------------------------------------------------------------------ backups ----
+say "Scheduling nightly database backups"
+mkdir -p /var/backups/cryptotrader && chmod 700 /var/backups/cryptotrader
+cat > /etc/cron.d/cryptotrader <<CRON
+# Nightly crypto_trader backup at 01:30 (server local time). Keeps 14 days.
+30 1 * * * root /bin/bash ${APP_DIR}/deploy/backup-crypto.sh >> /var/log/cryptotrader-backup.log 2>&1
+CRON
+chmod 644 /etc/cron.d/cryptotrader
+echo "  cron installed (backups -> /var/backups/cryptotrader)"
+
 # --------------------------------------------------------------------- TLS ----
 say "TLS"
 RESOLVED="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1; exit}')"
