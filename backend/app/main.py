@@ -94,6 +94,9 @@ def create_app() -> FastAPI:
             "set TOTP_SECRET before exposing it to the internet."
         )
 
+    # Don't expose the interactive docs / OpenAPI schema in production — no reason
+    # to publish the full API surface to unauthenticated visitors. Available in dev.
+    _docs = settings.app_env != "production"
     app = FastAPI(
         title="JSE Swing-Trading Decision-Support",
         version="0.1.0",
@@ -102,6 +105,9 @@ def create_app() -> FastAPI:
             "Signals are probabilistic estimates and can be wrong."
         ),
         lifespan=lifespan,
+        docs_url="/docs" if _docs else None,
+        redoc_url="/redoc" if _docs else None,
+        openapi_url="/openapi.json" if _docs else None,
     )
 
     # Auth gate added first so CORS (added next) wraps its 401s with CORS headers.

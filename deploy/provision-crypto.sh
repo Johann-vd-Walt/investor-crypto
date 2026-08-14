@@ -138,6 +138,10 @@ SITE_BOOT=/etc/nginx/sites-available/cryptotrader-bootstrap
 cp "$APP_DIR/deploy/nginx-cryptotrader-bootstrap.conf" "$SITE_BOOT"
 cp "$APP_DIR/deploy/nginx-cryptotrader.conf" "$SITE_TLS"
 
+# Security-headers snippet the TLS site includes in every location block.
+mkdir -p /etc/nginx/snippets
+cp "$APP_DIR/deploy/nginx-cryptotrader-security.conf" /etc/nginx/snippets/cryptotrader-security.conf
+
 # Shared webroot (created by the school). Make sure it exists regardless.
 mkdir -p /var/www/certbot/.well-known/acme-challenge
 [[ -f /var/www/certbot/holding.html ]] || cat > /var/www/certbot/holding.html <<'HOLD'

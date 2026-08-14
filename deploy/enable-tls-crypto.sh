@@ -64,6 +64,11 @@ fi
 # -------------------------------------------------------- 4. switch nginx ------
 say "Switching this site to HTTPS"
 [[ -f "$SITE_TLS" ]] || fail "$SITE_TLS missing. Run provision-crypto.sh first."
+# The TLS site includes this snippet in every location, so it must exist before
+# nginx -t will pass.
+mkdir -p /etc/nginx/snippets
+[[ -f "$APP_DIR/deploy/nginx-cryptotrader-security.conf" ]] && \
+  cp "$APP_DIR/deploy/nginx-cryptotrader-security.conf" /etc/nginx/snippets/cryptotrader-security.conf
 ln -sf "$SITE_TLS" "$SITE_TLS_LINK"
 rm -f "$SITE_BOOT_LINK"
 if ! nginx -t; then
