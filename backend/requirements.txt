@@ -1,0 +1,33 @@
+# --- Web / API ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+
+# --- Database ---
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+alembic>=1.13
+
+# --- HTTP client ---
+httpx>=0.27
+
+# --- Data / compute (used from Phase 2 onward) ---
+pandas>=2.2
+numpy>=1.26
+# NOTE: pandas-ta (and its transitive numba dep) has no wheel for Python 3.14
+# and fails to build from source. The five indicators the spec uses
+# (SMA/EMA/RSI/MACD/ATR, §10) are computed directly in pandas in
+# app/signals/indicators.py (Phase 5) instead — transparent and deterministic.
+# If you later move to Python <=3.13 you may re-add: pandas-ta>=0.3.14b0
+
+# --- Scheduling (used from Phase 2 onward) ---
+APScheduler>=3.10
+
+# --- Auth (TOTP gate) ---
+pyotp>=2.9
+PyJWT>=2.8
+qrcode>=7
+
+# --- Testing ---
+pytest>=8.2

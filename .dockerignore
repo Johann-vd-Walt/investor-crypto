@@ -1,0 +1,13 @@
+# Keep the Docker build context small — deps are installed inside the images.
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+backend/.env
+frontend/node_modules
+frontend/dist
+frontend/.vite
+.git
+.pytest_cache
+**/.mypy_cache
+deploy/.env

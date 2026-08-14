@@ -1,0 +1,30 @@
+{
+  "meta": { "found": 2, "returned": 2, "limit": 3, "page": 1 },
+  "data": [
+    {
+      "uuid": "aaaa-1111",
+      "title": "Naspers rallies on Tencent stake revaluation",
+      "description": "Naspers gained after...",
+      "snippet": "Naspers gained after Tencent...",
+      "url": "https://news.example.com/naspers-rally",
+      "image_url": "https://img.example.com/1.jpg",
+      "language": "en",
+      "published_at": "2026-07-19T09:15:00.000000Z",
+      "source": "example.com",
+      "entities": [
+        { "symbol": "NPN.JSE", "name": "Naspers", "sentiment_score": 0.62, "match_score": 21.4 },
+        { "symbol": "PRX.JSE", "name": "Prosus", "sentiment_score": 0.41, "match_score": 12.1 }
+      ]
+    },
+    {
+      "uuid": "bbbb-2222",
+      "title": "Rand weakens ahead of budget",
+      "snippet": "The rand fell...",
+      "url": "https://news.example.com/rand-weakens",
+      "language": "en",
+      "published_at": "2026-07-18T14:00:00.000000Z",
+      "source": "example.com",
+      "entities": []
+    }
+  ]
+}

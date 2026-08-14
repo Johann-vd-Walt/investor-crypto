@@ -1,0 +1,18 @@
+# Caddy automatically provisions + renews a Let's Encrypt TLS cert for this
+# domain (needs ports 80 & 443 reachable and DNS pointing here first).
+trade.mad-apps.co.za {
+	encode gzip zstd
+
+	# API + docs go to the backend container.
+	@api path /api/* /docs /docs/* /openapi.json /redoc
+	handle @api {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else = the React single-page app (client-side routing).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

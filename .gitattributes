@@ -1,0 +1,13 @@
+# Normalize line endings so files that run on the Linux server are always LF,
+# no matter which machine (or whose Git autocrlf setting) commits them.
+* text=auto eol=lf
+
+# Windows batch file must stay CRLF.
+*.bat text eol=crlf
+
+# Binary assets — never touch.
+*.png binary
+*.ico binary
+*.jpg binary
+*.woff binary
+*.woff2 binary

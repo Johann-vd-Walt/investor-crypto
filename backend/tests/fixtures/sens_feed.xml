@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Crypto News</title>
+    <item>
+      <title>Bitcoin ETF sees record inflows as price rallies</title>
+      <link>https://news.example.com/btc-etf-inflows</link>
+      <description>Spot Bitcoin ETFs recorded their largest daily inflow.</description>
+      <category>Markets</category>
+      <pubDate>Wed, 15 Jul 2026 08:30:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Ethereum upgrade goes live on mainnet</title>
+      <link>https://news.example.com/eth-upgrade</link>
+      <description>The latest Ethereum network upgrade activated successfully.</description>
+      <pubDate>Tue, 14 Jul 2026 14:00:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Malformed item without a link</title>
+      <description>Should be skipped.</description>
+    </item>
+  </channel>
+</rss>

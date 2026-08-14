@@ -1,0 +1,61 @@
+# systemd unit for the Crypto Swing-Trader API (FastAPI + uvicorn).
+# Install as /etc/systemd/system/cryptotrader.service
+#
+# Runs ONE worker on purpose: the price/signal scheduler (APScheduler) runs
+# in-process, so multiple workers would duplicate every job.
+
+[Unit]
+Description=Crypto Swing-Trader API (uvicorn)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=cryptotrader
+Group=cryptotrader
+WorkingDirectory=/srv/cryptotrader/backend
+
+# The app reads /srv/cryptotrader/backend/.env itself via pydantic-settings, so no
+# secret is listed here — it stays out of `systemctl show` and the journal.
+Environment="PATH=/srv/cryptotrader/backend/.venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+# Give pandas/numpy/matplotlib a writable cache under the app dir.
+Environment="HOME=/srv/cryptotrader"
+Environment="MPLCONFIGDIR=/srv/cryptotrader/.cache/matplotlib"
+
+# Apply DB migrations before the app starts. Idempotent: no-op when up to date.
+ExecStartPre=/srv/cryptotrader/backend/.venv/bin/alembic upgrade head
+
+ExecStart=/srv/cryptotrader/backend/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 8001 --workers 1 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# --- hardening ----------------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+# 'full' (not 'strict') leaves the app dir writable for the caches above while
+# keeping /usr /boot /etc read-only.
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+# Reaches MySQL on loopback and Binance / alternative.me / Cointelegraph outbound.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cryptotrader
+
+[Install]
+WantedBy=multi-user.target

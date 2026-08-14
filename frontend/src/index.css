@@ -1,0 +1,54 @@
+:root {
+  /* Dark theme palette (GitHub-dark inspired). */
+  --bg: #0d1117;
+  --bg-elev: #161b22;
+  --bg-elev2: #1c2129;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-strong: #1f6feb;
+  --danger: #f85149;
+  --success: #3fb950;
+  --warn-bg: #2d2200;
+  --warn-border: #9e6a03;
+  --warn-text: #e3b341;
+  --info-bg: #0b2f5e;
+  --info-border: #1f6feb;
+  --info-text: #cae0ff;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root { min-height: 100vh; }
+
+h1 { font-size: 1.5rem; margin: 0.5rem 0 1rem; color: var(--text); }
+
+a { color: var(--accent); }
+
+/* Form controls default to dark surfaces. */
+input, select, textarea {
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+input::placeholder { color: var(--text-muted); }
+
+/* Native date/number widgets render legibly on dark. */
+input[type="date"], input[type="datetime-local"], input[type="number"] {
+  color-scheme: dark;
+}
