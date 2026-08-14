@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app import auth
 from app.config import get_settings
+from app.db.session import get_db
+from app.repositories import auth_events as auth_events_repo
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -62,17 +65,19 @@ def status(request: Request) -> AuthStatus:
 
 
 @router.post("/login")
-def login(payload: LoginRequest, request: Request):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     settings = get_settings()
     if not auth.is_enabled(settings):
         # Auth disabled — nothing to log into.
         return {"token": "", "expires_in": 0, "detail": "auth disabled"}
 
     ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
     now = time.time()
     fails = [t for t in _failures.get(ip, []) if now - t < _WINDOW_SECONDS]
 
     if len(fails) >= _MAX_FAILURES:
+        auth_events_repo.record(db, event="locked", ip=ip, user_agent=ua)
         retry = max(1, int(_WINDOW_SECONDS - (now - min(fails))))
         raise HTTPException(
             status_code=429,
@@ -84,8 +89,10 @@ def login(payload: LoginRequest, request: Request):
         fails.append(now)
         _failures[ip] = fails
         _prune(now)
+        auth_events_repo.record(db, event="failed", ip=ip, user_agent=ua)
         raise HTTPException(status_code=401, detail="Invalid code.")
 
     _failures.pop(ip, None)  # success resets this IP's throttle
+    auth_events_repo.record(db, event="success", ip=ip, user_agent=ua)
     token, ttl = auth.create_session_token(settings)
     return LoginResponse(token=token, expires_in=ttl)

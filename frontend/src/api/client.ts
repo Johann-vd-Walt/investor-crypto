@@ -378,6 +378,29 @@ export interface HealthResponse {
   providers: Record<string, boolean>
 }
 
+export type AuthEventType = 'success' | 'failed' | 'locked'
+
+export interface AuthEvent {
+  id: number
+  created_at: string
+  event: AuthEventType
+  ip: string | null
+  user_agent: string | null
+}
+
+export interface AuthSummary {
+  window_hours: number
+  success: number
+  failed: number
+  locked: number
+  distinct_failed_ips: number
+}
+
+export interface AccessLogResponse {
+  summary: AuthSummary
+  events: AuthEvent[]
+}
+
 // --- Endpoints ---
 
 export const api = {
@@ -473,6 +496,9 @@ export const api = {
     qs.set('limit', String(limit))
     return request<SensListResponse>(`/api/sens?${qs.toString()}`)
   },
+
+  getAccessLog: (limit = 200) =>
+    request<AccessLogResponse>(`/api/security/access-log?limit=${limit}`),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>

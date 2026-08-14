@@ -360,6 +360,27 @@ class AppConfig(Base):
     )
 
 
+class AuthEvent(Base):
+    """Security log: every attempt to pass the app's TOTP login gate.
+
+    Recorded per attempt so the owner can see if anyone is probing the login.
+    Deliberately NOT listed in the seeder's wipe set — security history should
+    survive a re-seed.
+    """
+
+    __tablename__ = "auth_events"
+    __table_args__ = (Index("idx_authevt_at", "created_at"),)
+
+    id: Mapped[int] = mapped_column(UBigInt, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, nullable=False, server_default=_NOW
+    )
+    # "success" | "failed" | "locked" (rate-limited).
+    event: Mapped[str] = mapped_column(String(20), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
 class ProviderCall(Base):
     """Rate-limit and health tracking for every external call (Guardrail 2.6)."""
 

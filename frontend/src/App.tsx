@@ -10,6 +10,7 @@ import Journal from './pages/Journal'
 import Backtest from './pages/Backtest'
 import PineScript from './pages/PineScript'
 import Settings from './pages/Settings'
+import Security from './pages/Security'
 import SecurityDetail from './pages/SecurityDetail'
 import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
@@ -79,6 +80,7 @@ export default function App() {
           <NavLink to="/backtest">Backtest</NavLink>
           <NavLink to="/pinescript">Pine</NavLink>
           <NavLink to="/settings">Settings</NavLink>
+          <NavLink to="/security">Security</NavLink>
         </nav>
 
         <DataFreshnessBanner />
@@ -95,6 +97,7 @@ export default function App() {
             <Route path="/backtest" element={<Backtest />} />
             <Route path="/pinescript" element={<PineScript />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/security" element={<Security />} />
             <Route path="/security/:ticker" element={<SecurityDetail />} />
           </Routes>
           </ErrorBoundary>

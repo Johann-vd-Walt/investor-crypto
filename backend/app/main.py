@@ -27,6 +27,7 @@ from app.api import (
     routes_pine,
     routes_prices,
     routes_securities,
+    routes_security,
     routes_sens,
     routes_settings,
     routes_signals,
@@ -138,6 +139,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_pine.router)
     app.include_router(routes_settings.router)
     app.include_router(routes_admin.router)
+    app.include_router(routes_security.router)
     return app
 
 
