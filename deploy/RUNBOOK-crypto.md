@@ -108,6 +108,32 @@ sudo bash /srv/cryptotrader/deploy/enable-tls-crypto.sh trade.mad-apps.co.za you
 
 ---
 
+## Updating the app (Git flow)
+
+The server is a checkout of `github.com/Johann-vd-Walt/investor-crypto` (read-only
+deploy key). Code is edited **on the laptop**, never on the server.
+
+**On the laptop** — commit and push the change:
+```bash
+git add -A && git commit -m "what changed" && git push
+```
+
+**On the server** — one command pulls and redeploys:
+```bash
+sudo bash /srv/cryptotrader/deploy/update.sh
+```
+Or in a single line from the laptop:
+```bash
+ssh trade.mad-apps.co.za "sudo bash /srv/cryptotrader/deploy/update.sh"
+```
+
+`update.sh` does a hard reset to match GitHub, then runs `deploy-crypto.sh`
+(deps → migrations → frontend build → restart). It never re-ingests price
+history and never touches `.env`. Because the reset is hard, **do not edit code
+on the server** — those edits are discarded on the next update.
+
+---
+
 ## Everyday commands
 
 ```bash
