@@ -12,6 +12,7 @@ import Bot from './pages/Bot'
 import PaperPerformance from './pages/PaperPerformance'
 import Journal from './pages/Journal'
 import Backtest from './pages/Backtest'
+import Strategy from './pages/Strategy'
 import PineScript from './pages/PineScript'
 import Settings from './pages/Settings'
 import Security from './pages/Security'
@@ -86,6 +87,7 @@ export default function App() {
           <NavLink to="/paper">Paper</NavLink>
           <NavLink to="/journal">Journal</NavLink>
           <NavLink to="/backtest">Backtest</NavLink>
+          <NavLink to="/strategy">Strategy</NavLink>
           <NavLink to="/pinescript">Pine</NavLink>
           <NavLink to="/settings">Settings</NavLink>
           <NavLink to="/security">Security</NavLink>
@@ -107,6 +109,7 @@ export default function App() {
             <Route path="/paper" element={<PaperPerformance />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/backtest" element={<Backtest />} />
+            <Route path="/strategy" element={<Strategy />} />
             <Route path="/pinescript" element={<PineScript />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/security" element={<Security />} />
