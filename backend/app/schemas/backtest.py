@@ -104,6 +104,18 @@ class MomentumResponse(BaseModel):
     disclaimer: str
 
 
+class FoldMetricsOut(BaseModel):
+    index: int
+    start: date
+    end: date
+    trades: int
+    win_rate: DecimalAsFloat | None
+    avg_return_pct: DecimalAsFloat | None
+    total_pnl: DecimalAsFloat        # Rand, net
+    sharpe: DecimalAsFloat | None
+    psr: DecimalAsFloat | None
+
+
 class BacktestResponse(BaseModel):
     tickers_tested: int
     split_date: date | None
@@ -112,5 +124,6 @@ class BacktestResponse(BaseModel):
     benchmark: BenchmarkOut
     equity_curve: list[BacktestEquityPoint]  # OOS if split given, else full
     sample_trades: list[BacktestTradeOut]
+    walk_forward: list[FoldMetricsOut]       # sequential time folds (overfitting check)
     scope_note: str
     disclaimer: str

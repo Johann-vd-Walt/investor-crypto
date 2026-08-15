@@ -249,6 +249,38 @@ export default function Backtest() {
               <tr><td>Strategy avg return / trade</td><td>{num(t.full.avg_return_pct)}%</td></tr>
             </tbody></table>
           </div>
+          {t.walk_forward.length > 0 && (
+            <>
+              <h2 className="section-title">Walk-forward — does the edge hold across time?</h2>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Trades split into {t.walk_forward.length} sequential windows. A real edge shows up in
+                most of them; an overfit one lives in a single lucky period. Watch the recent (bottom)
+                fold especially.
+              </p>
+              <table>
+                <thead>
+                  <tr><th>Window</th><th>Trades</th><th>Return/trade</th><th>Win rate</th><th>Net P&amp;L</th><th>Prob. Sharpe&gt;0</th></tr>
+                </thead>
+                <tbody>
+                  {t.walk_forward.map((f) => (
+                    <tr key={f.index}>
+                      <td>{f.start} → {f.end}</td>
+                      <td>{f.trades}</td>
+                      <td style={{ color: (f.avg_return_pct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{num(f.avg_return_pct)}%</td>
+                      <td>{pct(f.win_rate)}</td>
+                      <td style={{ color: f.total_pnl >= 0 ? '#22c55e' : '#ef4444' }}>{rands(f.total_pnl)}</td>
+                      <td style={{ color: (f.psr ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b' }}>{pct(f.psr)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                If the numbers are strong in one window and weak/negative in others, the strategy is
+                <strong> regime-dependent, not robust</strong> — a red flag no single headline reveals.
+              </p>
+            </>
+          )}
+
           {t.equity_curve.length > 0 && (
             <>
               <h2 className="section-title">Equity curve ({t.split_date ? 'out-of-sample' : 'full'}, net P&amp;L)</h2>

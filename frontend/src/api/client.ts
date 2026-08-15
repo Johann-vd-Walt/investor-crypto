@@ -286,6 +286,18 @@ export interface Benchmark {
   btc_pct: number | null
 }
 
+export interface FoldMetrics {
+  index: number
+  start: string
+  end: string
+  trades: number
+  win_rate: number | null
+  avg_return_pct: number | null
+  total_pnl: number
+  sharpe: number | null
+  psr: number | null
+}
+
 export interface BacktestResponse {
   tickers_tested: number
   split_date: string | null
@@ -293,6 +305,7 @@ export interface BacktestResponse {
   out_of_sample: BacktestMetrics | null
   benchmark: Benchmark
   equity_curve: { date: string; cumulative_pnl: number }[]
+  walk_forward: FoldMetrics[]
   sample_trades: {
     ticker: string
     entry_datetime: string

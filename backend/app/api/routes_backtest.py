@@ -17,6 +17,7 @@ from app.schemas.backtest import (
     BacktestResponse,
     BacktestTradeOut,
     BenchmarkOut,
+    FoldMetricsOut,
     MetricsOut,
     MomentumEquityPoint,
     MomentumMetricsOut,
@@ -130,6 +131,7 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
 
     curve = oos_curve if payload.split_date else full_curve
     sample = sorted(all_trades, key=lambda t: t.entry_datetime)[-_MAX_SAMPLE_TRADES:]
+    folds = bt.walk_forward_folds(all_trades, n_folds=4)
 
     return BacktestResponse(
         tickers_tested=len(bars_by_sec),
@@ -159,6 +161,14 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
                 reason=t.reason,
             )
             for t in sample
+        ],
+        walk_forward=[
+            FoldMetricsOut(
+                index=f.index, start=f.start, end=f.end, trades=f.trades,
+                win_rate=f.win_rate, avg_return_pct=f.avg_return_pct,
+                total_pnl=cents_to_rand(f.total_pnl), sharpe=f.sharpe, psr=f.psr,
+            )
+            for f in folds
         ],
         scope_note=_SCOPE_NOTE,
         disclaimer=_DISCLAIMER,

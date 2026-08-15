@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -380,6 +380,53 @@ def buy_and_hold_pct(bars: list) -> float | None:
     if first == 0:
         return None
     return (last / first - 1.0) * 100.0
+
+
+@dataclass
+class FoldMetrics:
+    """One sequential walk-forward window's out-of-sample-style result."""
+    index: int
+    start: date
+    end: date
+    trades: int
+    win_rate: float | None
+    avg_return_pct: float | None
+    total_pnl: Decimal      # cents
+    sharpe: float | None    # per-trade
+    psr: float | None       # P(true Sharpe > 0) within the fold
+
+
+def walk_forward_folds(trades: list[BacktestTrade], *, n_folds: int = 4) -> list[FoldMetrics]:
+    """Bucket trades into ``n_folds`` sequential time windows (by entry date) and
+    summarise each. A genuine edge shows up in most folds; an overfit one lives
+    in a single lucky window. Uses per-fold PSR (trials=1) as a consistency read.
+    """
+    from app.signals import robustness as rob
+
+    if not trades or n_folds < 1:
+        return []
+    dates = [t.entry_datetime.date() for t in trades]
+    start, end = min(dates), max(dates)
+    total = (end - start).days or 1
+
+    buckets: dict[int, list[BacktestTrade]] = {i: [] for i in range(n_folds)}
+    for t in trades:
+        di = (t.entry_datetime.date() - start).days
+        idx = min(n_folds - 1, di * n_folds // (total + 1))
+        buckets[idx].append(t)
+
+    folds: list[FoldMetrics] = []
+    for i in range(n_folds):
+        m, _curve = summarize(buckets[i])
+        r = rob.robustness(m.returns, trials=1)
+        f_start = start + timedelta(days=round(i * total / n_folds))
+        f_end = end if i == n_folds - 1 else start + timedelta(days=round((i + 1) * total / n_folds))
+        folds.append(FoldMetrics(
+            index=i + 1, start=f_start, end=f_end, trades=m.trades,
+            win_rate=m.win_rate, avg_return_pct=m.avg_return_pct,
+            total_pnl=m.total_pnl, sharpe=r["sharpe"], psr=r["psr"],
+        ))
+    return folds
 
 
 def split_trades(
