@@ -385,6 +385,79 @@ class DerivativeMetric(Base):
     )
 
 
+class BotState(Base):
+    """Singleton (id=1) state for the real-time PAPER trading bot.
+
+    The bot simulates a portfolio against LIVE prices — no real orders, no
+    exchange keys, no real money. ``cash`` + open ``BotPosition`` mark-to-market
+    = equity. Not wiped by the seeder.
+    """
+
+    __tablename__ = "bot_state"
+
+    id: Mapped[int] = mapped_column(UInt, primary_key=True)  # singleton, always 1
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
+    tick_seconds: Mapped[int] = mapped_column(INTEGER, nullable=False, server_default=text("60"))
+    initial_cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    realized_pnl: Mapped[Decimal] = mapped_column(
+        Numeric(24, 10), nullable=False, server_default=text("0")
+    )
+    last_equity: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_tick_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, nullable=False, server_default=_NOW_ON_UPDATE
+    )
+
+
+class BotPosition(Base):
+    """One simulated position held by the paper bot (long-only)."""
+
+    __tablename__ = "bot_positions"
+
+    id: Mapped[int] = mapped_column(UBigInt, primary_key=True, autoincrement=True)
+    security_id: Mapped[int] = mapped_column(UInt, ForeignKey("securities.id"), nullable=False)
+    signal_id: Mapped[int | None] = mapped_column(UBigInt, ForeignKey("signals.id"), nullable=True)
+    entry_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    quantity: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    stop_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    horizon_days: Mapped[int] = mapped_column(SMALLINT, nullable=False, server_default=text("10"))
+    cost_basis: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)  # cash spent incl fees
+    status: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'OPEN'"))
+    exit_datetime: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    pnl: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)  # realized, net
+    exit_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+
+class BotEvent(Base):
+    """Activity log for the paper bot (what it did each tick)."""
+
+    __tablename__ = "bot_events"
+    __table_args__ = (Index("idx_botevt_at", "created_at"),)
+
+    id: Mapped[int] = mapped_column(UBigInt, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=_NOW)
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)  # open|close|skip|start|stop|info|error
+    ticker: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    detail: Mapped[str] = mapped_column(String(400), nullable=False)
+    equity: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+
+
+class BotEquity(Base):
+    """Equity time series for the paper bot's live curve."""
+
+    __tablename__ = "bot_equity"
+    __table_args__ = (Index("idx_boteq_ts", "ts"),)
+
+    id: Mapped[int] = mapped_column(UBigInt, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    equity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+
+
 class AuthEvent(Base):
     """Security log: every attempt to pass the app's TOTP login gate.
 

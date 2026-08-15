@@ -470,6 +470,49 @@ export interface ConsensusResponse {
   caveat: string
 }
 
+export interface BotPosition {
+  ticker: string
+  name: string
+  entry_datetime: string
+  entry_price: number
+  quantity: number
+  stop_price: number | null
+  live_price: number | null
+  cost_basis: number
+  market_value: number | null
+  unrealized_pnl: number | null
+  unrealized_pct: number | null
+}
+
+export interface BotEvent {
+  created_at: string
+  kind: string
+  ticker: string | null
+  detail: string
+  equity: number | null
+}
+
+export interface BotStatus {
+  enabled: boolean
+  tick_seconds: number
+  initial_cash: number
+  cash: number
+  realized_pnl: number
+  equity: number
+  return_pct: number
+  open_positions: number
+  started_at: string | null
+  last_tick_at: string | null
+}
+
+export interface BotResponse {
+  status: BotStatus
+  positions: BotPosition[]
+  events: BotEvent[]
+  equity_curve: { ts: string; equity: number }[]
+  note: string
+}
+
 // --- Endpoints ---
 
 export const api = {
@@ -576,6 +619,11 @@ export const api = {
     request<PositioningSnapshot>(`/api/positioning/${encodeURIComponent(ticker)}`),
 
   getConsensus: () => request<ConsensusResponse>('/api/consensus'),
+
+  getBot: () => request<BotResponse>('/api/bot'),
+  startBot: () => request<BotResponse>('/api/bot/start', { method: 'POST' }),
+  stopBot: () => request<BotResponse>('/api/bot/stop', { method: 'POST' }),
+  resetBot: () => request<BotResponse>('/api/bot/reset', { method: 'POST' }),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>

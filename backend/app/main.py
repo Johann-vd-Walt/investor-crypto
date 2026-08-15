@@ -19,6 +19,7 @@ from app.api import (
     routes_admin,
     routes_auth,
     routes_backtest,
+    routes_bot,
     routes_consensus,
     routes_freshness,
     routes_health,
@@ -144,6 +145,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_security.router)
     app.include_router(routes_positioning.router)
     app.include_router(routes_consensus.router)
+    app.include_router(routes_bot.router)
     return app
 
 

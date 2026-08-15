@@ -120,6 +120,12 @@ def start_scheduler() -> BackgroundScheduler:
         _safe_nightly_engine, trigger="cron", hour=3, minute=0,
         id="nightly_engine", replace_existing=True, misfire_grace_time=3600,
     )
+    # Real-time PAPER bot: ticks every 60s, no-ops unless enabled in the app.
+    from app.bot.engine import safe_tick as _bot_tick
+    scheduler.add_job(
+        _bot_tick, trigger="interval", seconds=60, id="bot_tick",
+        replace_existing=True, max_instances=1, coalesce=True,
+    )
     scheduler.start()
     _scheduler = scheduler
     logger.info(
