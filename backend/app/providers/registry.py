@@ -10,6 +10,7 @@ import logging
 
 from app.config import Settings, get_settings
 from app.providers.base import CallRecorder, NewsProvider, PriceProvider
+from app.providers.context_etf import SoSoValueEtfProvider
 from app.providers.context_onchain import ContextOnchainProvider
 from app.providers.macro_crypto import CryptoMacroProvider
 from app.providers.macro_market import FredMarketProvider
@@ -29,14 +30,13 @@ MACRO_SERIES_PLAN: list[tuple[str, str, str]] = [
     ("MVRV", "onchain", "series"),      # BTC market/realized cap — cycle valuation
 ]
 
-# Series we knowingly cannot source without a key — surfaced honestly.
-MACRO_SERIES_UNAVAILABLE: dict[str, str] = {
-    "ETF_FLOW": "Spot BTC/ETH ETF net flows — needs a free SoSoValue API key "
-                "(set SOSOVALUE_API_KEY).",
-}
+# Series that need a key — planned when the key is set, else surfaced honestly.
+MACRO_SERIES_UNAVAILABLE: dict[str, str] = {}
+
+_settings = get_settings()
 
 _MARKET_CODES = ["DXY", "GOLD", "US10Y", "SP500"]
-if get_settings().fred_api_key:
+if _settings.fred_api_key:
     MACRO_SERIES_PLAN += [(c, "market", "series") for c in _MARKET_CODES]
 else:
     for _c in _MARKET_CODES:
@@ -44,6 +44,14 @@ else:
             "Macro regime series — needs a free FRED API key (set FRED_API_KEY). "
             "https://fred.stlouisfed.org/docs/api/api_key.html"
         )
+
+if _settings.sosovalue_api_key:
+    MACRO_SERIES_PLAN.append(("ETF_FLOW", "etf", "series"))
+else:
+    MACRO_SERIES_UNAVAILABLE["ETF_FLOW"] = (
+        "Spot BTC ETF net flows — needs a free SoSoValue API key "
+        "(set SOSOVALUE_API_KEY). https://sosovalue.com/developer"
+    )
 
 MACRO_SERIES_LABELS: dict[str, str] = {
     "BTC": "Bitcoin (USDT)",
@@ -82,6 +90,8 @@ def get_macro_providers(
     }
     if settings.fred_api_key:
         providers["market"] = FredMarketProvider(settings.fred_api_key, call_recorder)
+    if settings.sosovalue_api_key:
+        providers["etf"] = SoSoValueEtfProvider(settings.sosovalue_api_key, call_recorder)
     return providers
 
 
