@@ -34,6 +34,15 @@ function MetricsTable({ title, m, highlight }: { title: string; m: BacktestMetri
             <tr><td>Total P&amp;L (net)</td><td>{rands(m.total_pnl)}</td></tr>
             <tr><td>Avg hold</td><td>{num(m.avg_hold_days, 1)} days</td></tr>
             <tr><td>Max drawdown</td><td>{rands(m.max_drawdown)} ({num(m.max_drawdown_pct, 1)}%)</td></tr>
+            <tr><td>Sharpe (per trade)</td><td>{num(m.sharpe)}</td></tr>
+            <tr>
+              <td>Prob. Sharpe &gt; 0</td>
+              <td style={{ color: (m.psr ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b' }}>{pct(m.psr)}</td>
+            </tr>
+            <tr>
+              <td>Deflated Sharpe ({m.trials} trial{m.trials === 1 ? '' : 's'})</td>
+              <td style={{ color: (m.deflated_sharpe ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{pct(m.deflated_sharpe)}</td>
+            </tr>
           </tbody>
         </table>
       )}
@@ -63,12 +72,14 @@ export default function Backtest() {
   const [splitDate, setSplitDate] = useState('')
   const [topK, setTopK] = useState('10')
   const [rebalance, setRebalance] = useState('21')
+  const [trials, setTrials] = useState('1')
 
   const tech = useMutation({
     mutationFn: () =>
       api.runBacktest({
         tickers: tickers.trim() ? tickers.split(',').map((t) => t.trim().toUpperCase()) : undefined,
         split_date: splitDate || undefined,
+        trials: Math.max(1, Number(trials) || 1),
       }),
   })
   const mom = useMutation({
@@ -127,6 +138,15 @@ export default function Backtest() {
           <dd>Compares the strategy to simply <strong>buying and holding</strong> (incl.
           Bitcoin). If holding beats the strategy, the strategy isn't adding value — a
           crucial, humbling check.</dd>
+          <dt>Prob. Sharpe &amp; Deflated Sharpe (technical)</dt>
+          <dd><strong>Prob. Sharpe &gt; 0</strong> is the probability the edge is real
+          given the sample size and the shape of returns. <strong>Deflated Sharpe</strong>
+          goes further and penalises it for how many settings you've tried (enter that in
+          "Configs tried") — because if you test enough configurations, one will look good
+          by luck. Below <strong>95%</strong>, treat the edge as <em>not established</em>.
+          Note: a high score means the per-trade edge is statistically non-zero — it does
+          <strong> not</strong> mean the strategy beats buy-and-hold. Always read it next
+          to the benchmark.</dd>
         </dl>
       </Explainer>
 
@@ -153,6 +173,11 @@ export default function Backtest() {
               <input type="number" value={rebalance} onChange={(e) => setRebalance(e.target.value)} style={{ width: '4rem' }} min="5" />
             </label>
           </>
+        )}
+        {strategy === 'technical' && (
+          <label title="How many settings have you tried? The Deflated Sharpe penalises the result for this many attempts.">Configs tried{' '}
+            <input type="number" value={trials} onChange={(e) => setTrials(e.target.value)} style={{ width: '4rem' }} min="1" />
+          </label>
         )}
         <button onClick={() => (strategy === 'momentum' ? mom.mutate() : tech.mutate())} disabled={pending}>
           {pending ? 'Running…' : 'Run backtest'}

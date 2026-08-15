@@ -27,6 +27,7 @@ from app.schemas.prices import cents_to_rand
 from app.services import settings as settings_service
 from app.signals import backtest as bt
 from app.signals import momentum, paper
+from app.signals import robustness as rob
 
 router = APIRouter(prefix="/api", tags=["backtest"])
 
@@ -36,18 +37,21 @@ _SCOPE_NOTE = (
     "current values on past dates would be lookahead. Net of brokerage + slippage."
 )
 _DISCLAIMER = (
-    "Past simulated performance does not predict future results. Tuning settings "
-    "against the same data risks overfitting — trust the out-of-sample column, not "
-    "the full-sample one, and keep the split honest."
+    "Past simulated performance does not predict future results. All figures are "
+    "NET OF COSTS. Read the out-of-sample column, not the full-sample one, and read "
+    "the Deflated Sharpe: it is the probability the edge is real after accounting "
+    "for sample size AND how many settings you tried. Below ~95% the edge is not "
+    "established — a single lucky configuration is exactly what tuning produces."
 )
 
 _MAX_SAMPLE_TRADES = 100
 
 
-def _metrics_out(m: bt.BacktestMetrics, account_cents: Decimal) -> MetricsOut:
+def _metrics_out(m: bt.BacktestMetrics, account_cents: Decimal, trials: int = 1) -> MetricsOut:
     dd_pct = None
     if account_cents and account_cents != 0:
         dd_pct = float(m.max_drawdown) / float(account_cents) * 100.0
+    r = rob.robustness(m.returns, trials=trials)
     return MetricsOut(
         trades=m.trades,
         wins=m.wins,
@@ -60,6 +64,11 @@ def _metrics_out(m: bt.BacktestMetrics, account_cents: Decimal) -> MetricsOut:
         profit_factor=m.profit_factor,
         expectancy=cents_to_rand(m.expectancy),
         reward_risk=m.reward_risk,
+        sharpe=r["sharpe"],
+        psr=r["psr"],
+        deflated_sharpe=r["deflated_sharpe"],
+        trials=r["trials"],
+        robustness_note=r["note"],
     )
 
 
@@ -125,13 +134,13 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
     return BacktestResponse(
         tickers_tested=len(bars_by_sec),
         split_date=payload.split_date,
-        full=_metrics_out(full_metrics, account_cents),
-        out_of_sample=_metrics_out(oos_metrics, account_cents) if oos_metrics else None,
+        full=_metrics_out(full_metrics, account_cents, payload.trials),
+        out_of_sample=_metrics_out(oos_metrics, account_cents, payload.trials) if oos_metrics else None,
         benchmark=BenchmarkOut(
             window_start=window_start,
             window_end=window_end,
             buy_hold_avg_pct=buy_hold_avg,
-            top40_pct=top40_pct,
+            btc_pct=btc_pct,
         ),
         equity_curve=[
             BacktestEquityPoint(date=p.on_date, cumulative_pnl=cents_to_rand(p.cumulative_pnl))

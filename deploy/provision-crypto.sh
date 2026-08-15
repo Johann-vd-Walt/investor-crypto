@@ -113,11 +113,20 @@ TOTP_ACCOUNT=owner
 # ---- Crypto market data (Binance public API — no key needed) ----
 PRICE_PROVIDER=binance
 BINANCE_BASE_URL=https://data-api.binance.vision
+# Binance USDⓈ-M futures host for positioning data (funding/OI/etc). Change only
+# if it's geo-blocked from the server (the app degrades gracefully if so).
+BINANCE_FUTURES_BASE_URL=https://fapi.binance.com
 QUOTE_CURRENCY=USDT
 FEAR_GREED_URL=https://api.alternative.me/fng/
 SENS_RSS_URL=https://cointelegraph.com/rss
 
-# ---- Optional keys (safe to leave blank) ----
+# ---- Optional FREE keys — unlock extra context layers (safe to leave blank) ----
+# FRED: macro regime (DXY/gold/US10y/S&P). https://fred.stlouisfed.org/docs/api/api_key.html
+FRED_API_KEY=
+# SoSoValue: spot BTC/ETH ETF net flows. https://sosovalue.com/developer
+SOSOVALUE_API_KEY=
+
+# ---- Other optional keys (safe to leave blank) ----
 MARKETAUX_API_KEY=
 EODHD_API_KEY=
 ALPHAVANTAGE_API_KEY=

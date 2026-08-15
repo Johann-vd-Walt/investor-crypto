@@ -14,6 +14,7 @@ class BacktestRequest(BaseModel):
     tickers: list[str] | None = Field(default=None, description="Default: all securities with price history")
     split_date: date | None = Field(default=None, description="Out-of-sample trades entered on/after this date")
     overrides: dict[str, Any] = Field(default_factory=dict, description="One-off tunable overrides (not persisted)")
+    trials: int = Field(default=1, ge=1, le=100000, description="How many strategy configs you've tried — used to DEFLATE the Sharpe for selection bias. Be honest: 1 if this is the first run.")
 
 
 class MetricsOut(BaseModel):
@@ -28,6 +29,12 @@ class MetricsOut(BaseModel):
     profit_factor: DecimalAsFloat | None
     expectancy: DecimalAsFloat       # Rand per trade
     reward_risk: DecimalAsFloat | None  # mean/stdev of per-trade returns
+    # --- Robustness (Tier 3): is the edge real, or short-sample + tuning luck? ---
+    sharpe: DecimalAsFloat | None       # per-trade Sharpe
+    psr: DecimalAsFloat | None          # Probabilistic Sharpe: P(true Sharpe > 0), 0..1
+    deflated_sharpe: DecimalAsFloat | None  # PSR deflated for `trials` configs, 0..1
+    trials: int                          # how many configs the deflation assumed
+    robustness_note: str
 
 
 class BenchmarkOut(BaseModel):

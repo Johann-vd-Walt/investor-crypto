@@ -257,6 +257,11 @@ export interface BacktestMetrics {
   profit_factor: number | null
   expectancy: number
   reward_risk: number | null
+  sharpe: number | null
+  psr: number | null
+  deflated_sharpe: number | null
+  trials: number
+  robustness_note: string
 }
 
 export interface Benchmark {
@@ -522,7 +527,7 @@ export const api = {
   getTaxSummary: (taxYear?: number) =>
     request<TaxSummary>(`/api/trades/tax-summary${taxYear ? `?tax_year=${taxYear}` : ''}`),
 
-  runBacktest: (body: { tickers?: string[]; split_date?: string; overrides?: Record<string, unknown> }) =>
+  runBacktest: (body: { tickers?: string[]; split_date?: string; trials?: number; overrides?: Record<string, unknown> }) =>
     request<BacktestResponse>('/api/backtest', { method: 'POST', body: JSON.stringify(body) }),
 
   runMomentumBacktest: (body: { tickers?: string[]; top_k?: number; rebalance_days?: number; split_date?: string }) =>

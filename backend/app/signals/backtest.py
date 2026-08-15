@@ -59,6 +59,7 @@ class BacktestMetrics:
     profit_factor: float | None = None   # gross_profit / gross_loss
     expectancy: Decimal = Decimal(0)     # cents, mean P&L per trade
     reward_risk: float | None = None     # mean(return%) / stdev(return%)
+    returns: list[float] = field(default_factory=list)  # per-trade return %, for robustness
 
 
 @dataclass
@@ -202,6 +203,7 @@ def summarize(trades: list[BacktestTrade]) -> tuple[BacktestMetrics, list[Equity
         profit_factor=profit_factor,
         expectancy=cum / n,
         reward_risk=reward_risk,
+        returns=returns,
     )
     return metrics, curve
 
