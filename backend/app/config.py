@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     binance_base_url: str = Field(
         default="https://data-api.binance.vision", alias="BINANCE_BASE_URL"
     )
+    # Binance USDⓈ-M FUTURES host (funding/OI/positioning data). Different host
+    # from spot; may be geo-restricted on some servers — the app degrades
+    # gracefully (derivatives simply stay empty) if it's unreachable.
+    binance_futures_base_url: str = Field(
+        default="https://fapi.binance.com", alias="BINANCE_FUTURES_BASE_URL"
+    )
     # Quote currency of the traded pairs (prices are stored/returned in this).
     quote_currency: str = Field(default="USDT", alias="QUOTE_CURRENCY")
     # Crypto Fear & Greed index (alternative.me, free, no key).

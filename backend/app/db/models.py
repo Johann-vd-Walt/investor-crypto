@@ -360,6 +360,31 @@ class AppConfig(Base):
     )
 
 
+class DerivativeMetric(Base):
+    """Time series of Binance USDⓈ-M futures positioning metrics (Tier 1).
+
+    Tall/flexible like ``indicator_values``: one row per (security, metric,
+    timestamp). Binance only retains ~30 days of most of these, so we poll and
+    persist to build our own history for percentile-based flags. Free data.
+
+    ``metric`` values: 'funding' (funding rate), 'open_interest' (USD value),
+    'long_short_pos' (top-trader position ratio), 'taker_ratio' (taker buy/sell).
+    Not wiped by the seeder — re-fetchable but cheap to keep.
+    """
+
+    __tablename__ = "derivative_metrics"
+
+    security_id: Mapped[int] = mapped_column(
+        UInt, ForeignKey("securities.id", ondelete="CASCADE"), primary_key=True
+    )
+    metric: Mapped[str] = mapped_column(String(24), primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
+    value: Mapped[Decimal] = mapped_column(Numeric(30, 10), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, nullable=False, server_default=_NOW
+    )
+
+
 class AuthEvent(Base):
     """Security log: every attempt to pass the app's TOTP login gate.
 

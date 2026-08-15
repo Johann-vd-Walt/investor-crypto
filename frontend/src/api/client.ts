@@ -401,6 +401,32 @@ export interface AccessLogResponse {
   events: AuthEvent[]
 }
 
+export type PositioningTone = 'bull' | 'bear' | 'warn' | 'neutral'
+
+export interface PositioningSignal {
+  metric: string
+  label: string
+  detail: string
+  value: number | null
+  percentile: number | null
+  tone: PositioningTone
+  sample: number
+}
+
+export interface PositioningSnapshot {
+  ticker: string
+  name: string
+  as_of: string | null
+  available: boolean
+  signals: PositioningSignal[]
+  note: string
+}
+
+export interface PositioningListResponse {
+  count: number
+  items: PositioningSnapshot[]
+}
+
 // --- Endpoints ---
 
 export const api = {
@@ -499,6 +525,10 @@ export const api = {
 
   getAccessLog: (limit = 200) =>
     request<AccessLogResponse>(`/api/security/access-log?limit=${limit}`),
+
+  getPositioning: () => request<PositioningListResponse>('/api/positioning'),
+  getPositioningFor: (ticker: string) =>
+    request<PositioningSnapshot>(`/api/positioning/${encodeURIComponent(ticker)}`),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>

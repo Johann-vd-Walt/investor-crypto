@@ -27,6 +27,7 @@ from app.providers.registry import (
     get_news_provider,
     get_price_provider,
 )
+from app.repositories import derivatives as deriv_repo
 from app.repositories import indicators as indicators_repo
 from app.repositories import macro as macro_repo
 from app.repositories import news as news_repo
@@ -182,6 +183,52 @@ def ingest_macro(db: Session | None = None) -> dict:
             summary["failed"] += 1
             summary["errors"][series_code] = str(exc)
             logger.warning("Failed to ingest macro %s: %s", series_code, exc)
+
+    if owns_session:
+        db.close()
+    return summary
+
+
+def ingest_derivatives(tickers: list[str] | None = None, *, db: Session | None = None) -> dict:
+    """Poll Binance futures positioning (funding/OI/L-S/taker) and persist it.
+
+    Free, no key. Binance only retains ~30 days of most of these, so this runs
+    on a schedule to build our own history. Isolated per-security failures are
+    recorded and skipped (Guardrail 2.7); a geo-blocked futures host simply
+    yields empty metrics rather than crashing.
+    """
+    from app.providers.derivatives_binance import BinanceDerivativesProvider
+
+    owns_session = db is None
+    db = db or SessionLocal()
+    recorder = lambda info: calls_repo.record(db, info)  # noqa: E731
+    provider = BinanceDerivativesProvider(call_recorder=recorder)
+
+    if tickers:
+        targets = [s for t in tickers if (s := securities_repo.get_by_ticker(db, t))]
+    else:
+        items, _total = securities_repo.list_securities(db, limit=1000)
+        targets = list(items)
+
+    summary = {"provider": provider.name, "requested": len(targets),
+               "succeeded": 0, "failed": 0, "rows_written": 0, "errors": {}}
+    for sec in targets:
+        try:
+            metrics = call_with_backoff(lambda: provider.get_metrics(sec.ticker), label=f"deriv:{sec.ticker}")
+            written = 0
+            for metric, points in metrics.items():
+                written += deriv_repo.upsert_metrics(
+                    db, security_id=sec.id, metric=metric, points=points
+                )
+            db.commit()
+            if any(metrics.values()):
+                summary["succeeded"] += 1
+            summary["rows_written"] += written
+        except Exception as exc:  # noqa: BLE001 — isolate per-security failures
+            db.rollback()
+            summary["failed"] += 1
+            summary["errors"][sec.ticker] = str(exc)
+            logger.warning("ingest_derivatives failed for %s: %s", sec.ticker, exc)
 
     if owns_session:
         db.close()
@@ -640,6 +687,7 @@ def update_paper_trades(*, db: Session | None = None) -> dict:
 JOBS: dict[str, callable] = {
     "ingest_daily_prices": ingest_daily_prices,
     "ingest_macro": ingest_macro,
+    "ingest_derivatives": ingest_derivatives,
     "ingest_news": ingest_news,
     "compute_indicators": compute_indicators,
     "generate_signals": generate_signals,

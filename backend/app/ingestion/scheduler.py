@@ -15,6 +15,7 @@ from app.ingestion.jobs import (
     compute_indicators,
     generate_signals,
     ingest_daily_prices,
+    ingest_derivatives,
     ingest_macro,
     ingest_news,
     ingest_sens,
@@ -42,6 +43,14 @@ def _safe_ingest_macro() -> None:
         logger.info("Scheduled ingest_macro summary: %s", summary)
     except Exception:  # noqa: BLE001
         logger.exception("Scheduled ingest_macro crashed")
+
+
+def _safe_ingest_derivatives() -> None:
+    try:
+        summary = ingest_derivatives()
+        logger.info("Scheduled ingest_derivatives summary: %s", summary)
+    except Exception:  # noqa: BLE001
+        logger.exception("Scheduled ingest_derivatives crashed")
 
 
 def _safe_ingest_news() -> None:
@@ -90,6 +99,12 @@ def start_scheduler() -> BackgroundScheduler:
         _safe_ingest_macro, trigger="cron", hour="2,10,18", minute=20,
         id="ingest_macro", replace_existing=True, misfire_grace_time=3600,
     )
+    # Derivatives positioning (funding/OI/L-S/taker) — free Binance futures.
+    # A few times a day so funding prints and daily OI/ratio points accumulate.
+    scheduler.add_job(
+        _safe_ingest_derivatives, trigger="cron", hour="2,10,18", minute=25,
+        id="ingest_derivatives", replace_existing=True, misfire_grace_time=3600,
+    )
     # Optional crypto news hourly.
     scheduler.add_job(
         _safe_ingest_news, trigger="cron", minute=30,
@@ -109,7 +124,8 @@ def start_scheduler() -> BackgroundScheduler:
     _scheduler = scheduler
     logger.info(
         "APScheduler started, timezone=Africa/Johannesburg (SAST): "
-        "prices @02:15; macro @02/10/18; news+rss hourly; engine @03:00 daily."
+        "prices @02:15; macro @02/10/18; derivatives @02/10/18; "
+        "news+rss hourly; engine @03:00 daily."
     )
     return scheduler
 

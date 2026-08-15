@@ -25,6 +25,7 @@ from app.api import (
     routes_news,
     routes_paper,
     routes_pine,
+    routes_positioning,
     routes_prices,
     routes_securities,
     routes_security,
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_settings.router)
     app.include_router(routes_admin.router)
     app.include_router(routes_security.router)
+    app.include_router(routes_positioning.router)
     return app
 
 
