@@ -89,6 +89,7 @@ export default function Backtest() {
         top_k: Number(topK),
         rebalance_days: Number(rebalance),
         split_date: splitDate || undefined,
+        trials: Math.max(1, Number(trials) || 1),
       }),
   })
 
@@ -102,6 +103,14 @@ export default function Backtest() {
         <tr><td>Sharpe</td><td>{num(mm.sharpe)}</td></tr>
         <tr><td>Max drawdown</td><td>{num(mm.max_drawdown_pct, 1)}%</td></tr>
         <tr><td>Winning periods</td><td>{pct(mm.win_rate_periods)}</td></tr>
+        <tr>
+          <td>Prob. Sharpe &gt; 0</td>
+          <td style={{ color: (mm.psr ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b' }}>{pct(mm.psr)}</td>
+        </tr>
+        <tr>
+          <td>Deflated Sharpe ({mm.trials} trial{mm.trials === 1 ? '' : 's'})</td>
+          <td style={{ color: (mm.deflated_sharpe ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{pct(mm.deflated_sharpe)}</td>
+        </tr>
       </tbody></table>
     </div>
   )
@@ -138,7 +147,7 @@ export default function Backtest() {
           <dd>Compares the strategy to simply <strong>buying and holding</strong> (incl.
           Bitcoin). If holding beats the strategy, the strategy isn't adding value — a
           crucial, humbling check.</dd>
-          <dt>Prob. Sharpe &amp; Deflated Sharpe (technical)</dt>
+          <dt>Prob. Sharpe &amp; Deflated Sharpe</dt>
           <dd><strong>Prob. Sharpe &gt; 0</strong> is the probability the edge is real
           given the sample size and the shape of returns. <strong>Deflated Sharpe</strong>
           goes further and penalises it for how many settings you've tried (enter that in
@@ -174,11 +183,9 @@ export default function Backtest() {
             </label>
           </>
         )}
-        {strategy === 'technical' && (
-          <label title="How many settings have you tried? The Deflated Sharpe penalises the result for this many attempts.">Configs tried{' '}
-            <input type="number" value={trials} onChange={(e) => setTrials(e.target.value)} style={{ width: '4rem' }} min="1" />
-          </label>
-        )}
+        <label title="How many settings have you tried? The Deflated Sharpe penalises the result for this many attempts.">Configs tried{' '}
+          <input type="number" value={trials} onChange={(e) => setTrials(e.target.value)} style={{ width: '4rem' }} min="1" />
+        </label>
         <button onClick={() => (strategy === 'momentum' ? mom.mutate() : tech.mutate())} disabled={pending}>
           {pending ? 'Running…' : 'Run backtest'}
         </button>

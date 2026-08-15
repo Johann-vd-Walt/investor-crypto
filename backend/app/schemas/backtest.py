@@ -67,6 +67,7 @@ class MomentumRequest(BaseModel):
     rebalance_days: int = Field(default=21, ge=5, le=120)
     split_date: date | None = Field(default=None, description="Out-of-sample: periods rebalanced on/after this date")
     overrides: dict[str, Any] = Field(default_factory=dict)
+    trials: int = Field(default=1, ge=1, le=100000, description="How many configs you've tried — deflates the Sharpe for selection bias. 1 if this is the first run.")
 
 
 class MomentumEquityPoint(BaseModel):
@@ -78,10 +79,15 @@ class MomentumMetricsOut(BaseModel):
     n_rebalances: int
     total_return_pct: DecimalAsFloat | None
     annualised_return_pct: DecimalAsFloat | None
-    sharpe: DecimalAsFloat | None
+    sharpe: DecimalAsFloat | None            # annualised
     max_drawdown_pct: DecimalAsFloat | None
     avg_holdings: DecimalAsFloat | None
     win_rate_periods: DecimalAsFloat | None
+    # --- Robustness (Tier 3): is the edge real, or short-sample + tuning luck? ---
+    psr: DecimalAsFloat | None               # P(true per-period Sharpe > 0), 0..1
+    deflated_sharpe: DecimalAsFloat | None   # PSR deflated for `trials` configs, 0..1
+    trials: int
+    robustness_note: str
 
 
 class MomentumResponse(BaseModel):

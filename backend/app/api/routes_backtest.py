@@ -196,6 +196,7 @@ def run_momentum_backtest(payload: MomentumRequest, db: Session = Depends(get_db
     )
 
     def _mm(m: bt.MomentumMetrics) -> MomentumMetricsOut:
+        r = rob.robustness(m.returns, trials=payload.trials)
         return MomentumMetricsOut(
             n_rebalances=m.n_rebalances,
             total_return_pct=m.total_return_pct,
@@ -204,6 +205,10 @@ def run_momentum_backtest(payload: MomentumRequest, db: Session = Depends(get_db
             max_drawdown_pct=m.max_drawdown_pct,
             avg_holdings=m.avg_holdings,
             win_rate_periods=m.win_rate_periods,
+            psr=r["psr"],
+            deflated_sharpe=r["deflated_sharpe"],
+            trials=r["trials"],
+            robustness_note=r["note"],
         )
 
     # Benchmark over the backtest window.

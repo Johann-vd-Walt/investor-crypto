@@ -316,6 +316,10 @@ export interface MomentumMetrics {
   max_drawdown_pct: number | null
   avg_holdings: number | null
   win_rate_periods: number | null
+  psr: number | null
+  deflated_sharpe: number | null
+  trials: number
+  robustness_note: string
 }
 
 export interface MomentumResponse {
@@ -547,7 +551,7 @@ export const api = {
   runBacktest: (body: { tickers?: string[]; split_date?: string; trials?: number; overrides?: Record<string, unknown> }) =>
     request<BacktestResponse>('/api/backtest', { method: 'POST', body: JSON.stringify(body) }),
 
-  runMomentumBacktest: (body: { tickers?: string[]; top_k?: number; rebalance_days?: number; split_date?: string }) =>
+  runMomentumBacktest: (body: { tickers?: string[]; top_k?: number; rebalance_days?: number; split_date?: string; trials?: number }) =>
     request<MomentumResponse>('/api/backtest/momentum', { method: 'POST', body: JSON.stringify(body) }),
 
   getPineScript: () =>

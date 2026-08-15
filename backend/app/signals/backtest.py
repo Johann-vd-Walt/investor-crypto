@@ -225,6 +225,7 @@ class MomentumMetrics:
     avg_holdings: float | None
     win_rate_periods: float | None
     equity_curve: list[EquityPoint]        # normalised: cents field holds equity*10000
+    returns: list[float] = field(default_factory=list)  # per-period returns (fraction), for robustness
 
 
 @dataclass
@@ -263,6 +264,7 @@ def _momentum_metrics(periods: list[MomentumPeriod], rebalance_days: int) -> Mom
         avg_holdings=sum(len(p.holdings) for p in periods) / len(periods),
         win_rate_periods=sum(1 for p in prets if p > 0) / len(prets),
         equity_curve=curve,
+        returns=prets,
     )
 
 
