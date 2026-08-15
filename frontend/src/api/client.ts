@@ -111,6 +111,21 @@ export interface MacroSnapshotResponse {
   items: MacroSnapshotItem[]
 }
 
+export interface MacroObservation {
+  observation_date: string
+  value: number
+  unit: string | null
+  source: string | null
+}
+
+export interface MacroSeriesResponse {
+  series_code: string
+  label: string
+  unit: string | null
+  source: string | null
+  observations: MacroObservation[]
+}
+
 export interface NewsArticle {
   id: number
   source: string
@@ -493,6 +508,8 @@ export const api = {
     ),
 
   getMacroSnapshot: () => request<MacroSnapshotResponse>('/api/macro'),
+  getMacroSeries: (code: string) =>
+    request<MacroSeriesResponse>(`/api/macro/${encodeURIComponent(code)}`),
 
   getTickerNews: (ticker: string, limit = 20) =>
     request<NewsListResponse>(
