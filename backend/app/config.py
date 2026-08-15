@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     alphavantage_api_key: str = Field(default="", alias="ALPHAVANTAGE_API_KEY")
     marketaux_api_key: str = Field(default="", alias="MARKETAUX_API_KEY")
     oilprice_api_key: str = Field(default="", alias="OILPRICE_API_KEY")
+    # Tier 2 context sources that need a FREE key (blank = that layer disabled):
+    #   FRED (macro regime: DXY/gold/yields/S&P) — https://fred.stlouisfed.org/docs/api/api_key.html
+    #   SoSoValue (spot BTC/ETH ETF net flows)   — https://sosovalue.com/developer
+    fred_api_key: str = Field(default="", alias="FRED_API_KEY")
+    sosovalue_api_key: str = Field(default="", alias="SOSOVALUE_API_KEY")
 
     # App
     app_env: str = Field(default="development", alias="APP_ENV")

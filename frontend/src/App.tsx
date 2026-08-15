@@ -6,6 +6,7 @@ import Securities from './pages/Securities'
 import Watchlist from './pages/Watchlist'
 import Signals from './pages/Signals'
 import Positioning from './pages/Positioning'
+import Context from './pages/Context'
 import PaperPerformance from './pages/PaperPerformance'
 import Journal from './pages/Journal'
 import Backtest from './pages/Backtest'
@@ -77,6 +78,7 @@ export default function App() {
           <NavLink to="/watchlist">Watchlist</NavLink>
           <NavLink to="/signals">Signals</NavLink>
           <NavLink to="/positioning">Positioning</NavLink>
+          <NavLink to="/context">Context</NavLink>
           <NavLink to="/paper">Paper</NavLink>
           <NavLink to="/journal">Journal</NavLink>
           <NavLink to="/backtest">Backtest</NavLink>
@@ -95,6 +97,7 @@ export default function App() {
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/positioning" element={<Positioning />} />
+            <Route path="/context" element={<Context />} />
             <Route path="/paper" element={<PaperPerformance />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/backtest" element={<Backtest />} />
