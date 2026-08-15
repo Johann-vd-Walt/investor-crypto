@@ -427,6 +427,25 @@ export interface PositioningListResponse {
   items: PositioningSnapshot[]
 }
 
+export interface CoinConsensus {
+  ticker: string | null
+  inst: string
+  longs: number
+  shorts: number
+  traders: number
+  net_bias: number
+  lean: 'long' | 'short' | 'split'
+}
+
+export interface ConsensusResponse {
+  source: string
+  traders_sampled: number
+  as_of_cache_age_s: number
+  available: boolean
+  items: CoinConsensus[]
+  caveat: string
+}
+
 // --- Endpoints ---
 
 export const api = {
@@ -529,6 +548,8 @@ export const api = {
   getPositioning: () => request<PositioningListResponse>('/api/positioning'),
   getPositioningFor: (ticker: string) =>
     request<PositioningSnapshot>(`/api/positioning/${encodeURIComponent(ticker)}`),
+
+  getConsensus: () => request<ConsensusResponse>('/api/consensus'),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>
