@@ -1,12 +1,13 @@
-"""Free on-chain & liquidity context series (keyless).
+"""Free, keyless context series.
 
   - STABLE : aggregate stablecoin supply (USD bn) — "dry powder" — DeFiLlama
-  - MVRV   : Bitcoin market-cap / realized-cap ratio — cycle valuation — Coin
-             Metrics community API (computed from CapMrktCurUSD / CapRealUSD)
+  - MVRV   : Bitcoin market-cap / realized-cap ratio — cycle valuation —
+             bitcoin-data.com (bgeometrics), keyless, full daily history
+  - GOLD   : spot gold (USD/oz) — risk-regime backdrop — gold-api.com (keyless,
+             current price only; a daily series builds up as the job runs)
 
-Both are slow-moving CONTEXT, informative mainly at cycle extremes — never swing
-triggers. Keyless, free. Parsers pure for testing. Coin Metrics community data is
-for non-commercial/personal use (fits this app).
+All slow-moving CONTEXT, informative mainly at extremes — never swing triggers.
+Keyless, free. Parsers pure for testing.
 """
 
 from __future__ import annotations
@@ -22,11 +23,12 @@ from app.providers.base import MacroProvider, Observation
 logger = logging.getLogger("app.providers.context_onchain")
 
 _DEFILLAMA = "https://stablecoins.llama.fi/stablecoincharts/all"
-_COINMETRICS = "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics"
+_MVRV = "https://bitcoin-data.com/v1/mvrv"
+_GOLD = "https://api.gold-api.com/price/XAU"
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 
-def parse_stablecoins(payload: list) -> list[tuple[date, Decimal]]:
+def parse_stablecoins(payload) -> list[tuple[date, Decimal]]:
     """DeFiLlama stablecoin chart -> [(date, total supply in USD bn)]."""
     out: list[tuple[date, Decimal]] = []
     for row in payload or []:
@@ -45,49 +47,59 @@ def parse_stablecoins(payload: list) -> list[tuple[date, Decimal]]:
     return out
 
 
-def parse_mvrv(payload: dict) -> list[tuple[date, Decimal]]:
-    """Coin Metrics asset-metrics -> [(date, MVRV = mkt/realized)]."""
+def parse_mvrv(payload) -> list[tuple[date, Decimal]]:
+    """bitcoin-data.com MVRV history [{d, mvrv}] -> [(date, ratio)]."""
     out: list[tuple[date, Decimal]] = []
-    for row in (payload or {}).get("data", []) or []:
-        t = row.get("time")
-        mkt = row.get("CapMrktCurUSD")
-        real = row.get("CapRealUSD")
-        if not t or mkt is None or real is None:
+    for row in payload or []:
+        if not isinstance(row, dict):
+            continue
+        d_raw = row.get("d")
+        v_raw = row.get("mvrv")
+        if not d_raw or v_raw is None:
             continue
         try:
-            d = datetime.fromisoformat(t.replace("Z", "+00:00")).date()
-            reald = Decimal(str(real))
-            if reald == 0:
-                continue
-            out.append((d, (Decimal(str(mkt)) / reald).quantize(Decimal("0.0001"))))
+            d = datetime.strptime(str(d_raw)[:10], "%Y-%m-%d").date()
+            out.append((d, Decimal(str(v_raw)).quantize(Decimal("0.0001"))))
         except (ValueError, TypeError, InvalidOperation):
             continue
     return out
 
 
+def parse_gold(payload) -> list[tuple[date, Decimal]]:
+    """gold-api.com current price {price, updatedAt} -> [(date, USD/oz)]."""
+    if not isinstance(payload, dict) or payload.get("price") is None:
+        return []
+    try:
+        px = Decimal(str(payload["price"])).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        return []
+    upd = payload.get("updatedAt")
+    try:
+        d = datetime.fromisoformat(str(upd).replace("Z", "+00:00")).date() if upd else date.today()
+    except (ValueError, TypeError):
+        d = date.today()
+    return [(d, px)]
+
+
 class ContextOnchainProvider(MacroProvider):
     @property
     def name(self) -> str:
-        return "onchain_free"
+        return "context_free"
 
     def get_series(
         self, series_code: str, start: date | None = None, end: date | None = None
     ) -> list[Observation]:
         if series_code == "STABLE":
-            return self._fetch(_DEFILLAMA, None, parse_stablecoins, "USD bn", start, end, "STABLE")
+            return self._fetch(_DEFILLAMA, parse_stablecoins, "USD bn", start, end, "STABLE")
         if series_code == "MVRV":
-            params = {
-                "assets": "btc",
-                "metrics": "CapMrktCurUSD,CapRealUSD",
-                "frequency": "1d",
-                "page_size": 10000,
-            }
-            return self._fetch(_COINMETRICS, params, parse_mvrv, "ratio", start, end, "MVRV")
+            return self._fetch(_MVRV, parse_mvrv, "ratio", start, end, "MVRV")
+        if series_code == "GOLD":
+            return self._fetch(_GOLD, parse_gold, "USD/oz", start, end, "GOLD")
         raise ValueError(f"ContextOnchainProvider has no series '{series_code}'.")
 
-    def _fetch(self, url, params, parser, unit, start, end, code) -> list[Observation]:
+    def _fetch(self, url, parser, unit, start, end, code) -> list[Observation]:
         try:
-            resp = httpx.get(url, params=params, headers=_HEADERS, timeout=40.0)
+            resp = httpx.get(url, headers=_HEADERS, timeout=40.0)
         except httpx.HTTPError as exc:
             self._record(endpoint=url, status_code=None, rows_returned=None, note=f"{code}: {exc}")
             raise

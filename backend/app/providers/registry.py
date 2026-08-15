@@ -28,6 +28,7 @@ MACRO_SERIES_PLAN: list[tuple[str, str, str]] = [
     ("FNG", "crypto", "series"),        # Fear & Greed index (0..100)
     ("STABLE", "onchain", "series"),    # Stablecoin supply (USD bn) — dry powder
     ("MVRV", "onchain", "series"),      # BTC market/realized cap — cycle valuation
+    ("GOLD", "onchain", "series"),      # Spot gold (USD/oz) — keyless
 ]
 
 # Series that need a key — planned when the key is set, else surfaced honestly.
@@ -35,7 +36,7 @@ MACRO_SERIES_UNAVAILABLE: dict[str, str] = {}
 
 _settings = get_settings()
 
-_MARKET_CODES = ["DXY", "GOLD", "US10Y", "SP500"]
+_MARKET_CODES = ["DXY", "US10Y", "SP500"]
 if _settings.fred_api_key:
     MACRO_SERIES_PLAN += [(c, "market", "series") for c in _MARKET_CODES]
 else:

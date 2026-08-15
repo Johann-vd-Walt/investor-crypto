@@ -21,14 +21,13 @@ logger = logging.getLogger("app.providers.macro_market")
 
 _BASE = "https://api.stlouisfed.org/fred/series/observations"
 
-# our series code -> FRED series id
+# our series code -> FRED series id (gold is sourced keyless elsewhere)
 _SERIES: dict[str, str] = {
-    "DXY": "DTWEXBGS",           # Nominal Broad USD Index (proxy for ICE DXY)
-    "GOLD": "GOLDAMGBD228NLBM",  # Gold price, London AM fix (USD/oz)
-    "US10Y": "DGS10",            # 10-Year Treasury yield (%)
-    "SP500": "SP500",            # S&P 500 index level
+    "DXY": "DTWEXBGS",   # Nominal Broad USD Index (proxy for ICE DXY)
+    "US10Y": "DGS10",    # 10-Year Treasury yield (%)
+    "SP500": "SP500",    # S&P 500 index level
 }
-_UNITS: dict[str, str] = {"DXY": "index", "GOLD": "USD/oz", "US10Y": "%", "SP500": "index"}
+_UNITS: dict[str, str] = {"DXY": "index", "US10Y": "%", "SP500": "index"}
 
 
 def parse_fred(payload: dict) -> list[tuple[date, Decimal]]:
