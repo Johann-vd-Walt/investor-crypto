@@ -421,7 +421,8 @@ class BotPosition(Base):
     signal_id: Mapped[int | None] = mapped_column(UBigInt, ForeignKey("signals.id"), nullable=True)
     entry_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     entry_price: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
-    quantity: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    # Fractional — crypto positions are not whole units.
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     stop_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     horizon_days: Mapped[int] = mapped_column(SMALLINT, nullable=False, server_default=text("10"))
     cost_basis: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)  # cash spent incl fees

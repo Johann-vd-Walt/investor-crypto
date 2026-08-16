@@ -131,7 +131,7 @@ export default function Bot() {
             {q.data?.positions.map((p) => (
               <tr key={p.ticker}>
                 <td><strong>{p.ticker}</strong></td>
-                <td>{p.quantity}</td>
+                <td>{p.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td>
                 <td>{usd(p.entry_price)}</td>
                 <td>{usd(p.live_price)}</td>
                 <td>{p.stop_price ? usd(p.stop_price) : '—'}</td>

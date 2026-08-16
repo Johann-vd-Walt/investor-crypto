@@ -14,7 +14,7 @@ class BotPositionOut(BaseModel):
     name: str
     entry_datetime: datetime
     entry_price: DecimalAsFloat
-    quantity: int
+    quantity: DecimalAsFloat
     stop_price: DecimalAsFloat | None
     live_price: DecimalAsFloat | None
     cost_basis: DecimalAsFloat

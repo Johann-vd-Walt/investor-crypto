@@ -36,6 +36,7 @@ logger = logging.getLogger("app.bot")
 _EQUITY_RETENTION_DAYS = 7
 _EVENT_RETENTION_DAYS = 30
 _SIGNAL_MAX_AGE_DAYS = 2
+_MIN_POSITION_USD = Decimal("10")  # don't bother with dust-sized positions
 
 
 # --------------------------------------------------------------- live prices ---
@@ -45,7 +46,9 @@ def fetch_live_prices(symbols: list[str], base_url: str) -> dict[str, Decimal]:
         return {}
     url = f"{base_url.rstrip('/')}/api/v3/ticker/price"
     try:
-        resp = httpx.get(url, params={"symbols": json.dumps(sorted(set(symbols)))}, timeout=15.0)
+        # Binance requires the symbols array as COMPACT JSON (no spaces), else 400.
+        payload = json.dumps(sorted(set(symbols)), separators=(",", ":"))
+        resp = httpx.get(url, params={"symbols": payload}, timeout=15.0)
         resp.raise_for_status()
         out: dict[str, Decimal] = {}
         for row in resp.json():
@@ -128,13 +131,14 @@ def tick(db: Session) -> dict:
         select(BotPosition.signal_id).where(BotPosition.signal_id.is_not(None))
     ).all()}
     since = now - timedelta(days=_SIGNAL_MAX_AGE_DAYS)
+    # Actionable = a recent, still-open BUY. We size it ourselves (below), so we
+    # do NOT depend on the signal's absolute suggested_size (whole-unit, and sized
+    # to a different account).
     sigs = list(db.scalars(
         select(Signal).where(
             Signal.direction == SignalDirection.BUY,
             Signal.status == SignalStatus.OPEN,
             Signal.generated_at >= since,
-            Signal.suggested_entry.is_not(None),
-            Signal.suggested_size.is_not(None),
         ).order_by(Signal.generated_at.desc())
     ).all())
 
@@ -146,12 +150,21 @@ def tick(db: Session) -> dict:
 
     summary = {"closed": 0, "opened": 0, "skipped": 0}
 
+    gross_in = Decimal(str(1 + entry_frac))
+    gross_out = Decimal(str(1 - exit_frac))
+
+    def mark(p: BotPosition) -> Decimal:
+        m = prices.get(id_to_ticker.get(p.security_id))
+        return p.quantity * (m if m is not None else p.entry_price)
+
     # 1. Manage open positions against live prices.
+    survivors: list[BotPosition] = []
     held: set[int] = set()
     for p in open_pos:
         tk = id_to_ticker.get(p.security_id)
         px = prices.get(tk) if tk else None
         if px is None:
+            survivors.append(p)
             held.add(p.security_id)
             continue
         reason = None
@@ -160,37 +173,44 @@ def tick(db: Session) -> dict:
         elif (now - p.entry_datetime).days >= p.horizon_days:
             reason = "horizon"
         if reason:
-            proceeds = px * p.quantity * Decimal(str(1 - exit_frac))
+            proceeds = px * p.quantity * gross_out
             pnl = proceeds - p.cost_basis
             p.status, p.exit_datetime, p.exit_price, p.pnl, p.exit_reason = "CLOSED", now, px, pnl, reason
             st.cash += proceeds
             st.realized_pnl += pnl
             summary["closed"] += 1
-            _log(db, "close", f"{reason} exit {p.quantity} @ {px:.4f}, P&L ${pnl:.2f}", ticker=tk)
+            _log(db, "close", f"{reason} exit {p.quantity:.6f} @ {px:.4f}, P&L ${pnl:.2f}", ticker=tk)
         else:
+            survivors.append(p)
             held.add(p.security_id)
 
-    # 2. Open fresh actionable BUYs the bot hasn't taken.
+    # 2. Open fresh actionable BUYs — sized to OUR OWN equity in fractional units.
+    #    Each position targets an equal-weight slice (equity / max positions),
+    #    capped by available cash. We ignore the signal's absolute suggested_size.
+    equity_est = st.cash + sum((mark(p) for p in survivors), Decimal(0))
+    max_open = max(1, settings.max_open_positions)
     n_open = len(held)
     for s in sigs:
         if s.id in acted or s.security_id in held:
             continue
+        if n_open >= max_open:
+            break
         tk = id_to_ticker.get(s.security_id)
         px = prices.get(tk) if tk else None
-        if px is None:
+        if px is None or px <= 0:
             continue
-        if n_open >= settings.max_open_positions:
+        target = min(equity_est / Decimal(max_open), st.cash * Decimal("0.99"))
+        if target < _MIN_POSITION_USD:
+            summary["skipped"] += 1
             continue
-        size = int(s.suggested_size or 0)
-        if size <= 0:
-            continue
-        cost = px * size * Decimal(str(1 + entry_frac))
-        if st.cash < cost:
+        qty = (target / (px * gross_in)).quantize(Decimal("0.00000001"))
+        cost = px * qty * gross_in
+        if qty <= 0 or cost > st.cash:
             summary["skipped"] += 1
             continue
         db.add(BotPosition(
             security_id=s.security_id, signal_id=s.id, entry_datetime=now,
-            entry_price=px, quantity=size, stop_price=s.suggested_stop,
+            entry_price=px, quantity=qty, stop_price=s.suggested_stop,
             horizon_days=s.horizon_days, cost_basis=cost, status="OPEN",
         ))
         st.cash -= cost
@@ -199,14 +219,14 @@ def tick(db: Session) -> dict:
         n_open += 1
         summary["opened"] += 1
         stop_txt = f", stop {s.suggested_stop:.4f}" if s.suggested_stop is not None else ""
-        _log(db, "open", f"BUY {size} @ {px:.4f}{stop_txt}", ticker=tk)
+        _log(db, "open", f"BUY {qty:.6f} @ {px:.4f} (${cost:.0f}){stop_txt}", ticker=tk)
 
-    # 3. Mark-to-market equity.
+    # 3. Mark-to-market equity (flush so freshly-opened positions are counted).
+    db.flush()
     equity = st.cash
     for p in db.scalars(select(BotPosition).where(BotPosition.status == "OPEN")).all():
-        tk = id_to_ticker.get(p.security_id)
-        mark = prices.get(tk) if tk else None
-        equity += p.quantity * (mark if mark is not None else p.entry_price)
+        m = prices.get(id_to_ticker.get(p.security_id))
+        equity += p.quantity * (m if m is not None else p.entry_price)
     st.last_equity = equity
     st.last_tick_at = now
     db.add(BotEquity(ts=now, equity=equity, cash=st.cash))
