@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import pandas as pd
 
@@ -47,7 +47,7 @@ class SignalDraft:
     momentum_score: Decimal | None
     suggested_entry: Decimal | None
     suggested_stop: Decimal | None
-    suggested_size: int | None
+    suggested_size: Decimal | None
     rationale: dict = field(default_factory=dict)
 
 
@@ -74,12 +74,14 @@ def compute_trade_levels(
     close_cents: float | None,
     atr_cents: float | None,
     settings: Settings,
-) -> tuple[Decimal | None, Decimal | None, int | None]:
-    """Return (entry, stop, size) in cents/shares. Shared by the engine and the
-    backtester so live and simulated trades size identically.
+) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
+    """Return (entry, stop, size) in native quote units. Shared by the engine and
+    the backtester so live and simulated trades size identically.
 
     HOLD (or missing close/ATR) yields no stop/size. Size uses the risk-per-trade
-    rule: risk_rand = account_size * risk_pct%, size = risk_rand / |entry-stop|.
+    rule: risk_budget = account_size * risk_pct%, size = risk_budget / |entry-stop|.
+    Size is FRACTIONAL (crypto units aren't whole). Prices are native (USDT) — the
+    old ``/100`` cents conversion from the JSE era is gone (it inflated size 100x).
     """
     entry = Decimal(str(close_cents)) if close_cents is not None else None
     if entry is None or atr_cents is None or direction == SignalDirection.HOLD:
@@ -88,13 +90,21 @@ def compute_trade_levels(
     atr_dist = Decimal(str(atr_cents)) * settings.atr_stop_multiple
     stop = entry - atr_dist if direction == SignalDirection.BUY else entry + atr_dist
 
-    risk_rand = settings.account_size * (settings.risk_per_trade_pct / Decimal(100))
-    per_share_rand = abs(entry - stop) / Decimal(100)
-    size: int | None = None
-    if per_share_rand > 0:
-        size = int((risk_rand / per_share_rand).to_integral_value(rounding=ROUND_DOWN))
+    risk_budget = settings.account_size * (settings.risk_per_trade_pct / Decimal(100))
+    per_unit = abs(entry - stop)
+    size: Decimal | None = None
+    if per_unit > 0:
+        size = risk_budget / per_unit
+        # No leverage on spot: never suggest a position bigger than the account
+        # can actually buy. With a tight stop the risk rule alone would imply
+        # >100% notional; cap it at the affordable units.
+        if entry > 0:
+            max_affordable = settings.account_size / entry
+            if size > max_affordable:
+                size = max_affordable
+        size = size.quantize(Decimal("0.00000001"))
         if size < 0:
-            size = 0
+            size = Decimal(0)
     return entry, stop, size
 
 

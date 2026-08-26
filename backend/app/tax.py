@@ -29,7 +29,7 @@ class TradeRow:
     security_id: int
     ticker: str
     side: str  # "BUY" | "SELL"
-    quantity: int
+    quantity: Decimal
     price: Decimal  # per share, cents
     fees: Decimal   # total for the trade, cents
     trade_datetime: datetime
@@ -39,16 +39,16 @@ class TradeRow:
 class Disposal:
     ticker: str
     sell_datetime: datetime
-    quantity: int
+    quantity: Decimal
     proceeds: Decimal    # cents, net of sell fees
     base_cost: Decimal   # cents, incl. allocated buy fees
     gain: Decimal        # cents = proceeds - base_cost
-    unmatched_quantity: int  # sold without a matching buy lot (short/oversold)
+    unmatched_quantity: Decimal  # sold without a matching buy lot (short/oversold)
 
 
 @dataclass
 class _Lot:
-    quantity: int
+    quantity: Decimal
     price: Decimal          # per share, cents
     fee_per_share: Decimal  # allocated buy fee, cents
 

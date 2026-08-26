@@ -472,6 +472,8 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
                     confidence=confidence,
                     momentum_score=mom_scores.get(sec.id, 0.0),
                 )
+                # One current signal per coin: expire the previous open one first.
+                signals_repo.supersede_open(db, security_id=sec.id)
                 sig = signals_repo.create(db, draft)
                 summary["generated"] += 1
 

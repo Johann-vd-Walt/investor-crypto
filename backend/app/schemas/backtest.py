@@ -55,7 +55,7 @@ class BacktestTradeOut(BaseModel):
     exit_datetime: datetime | None
     entry_price: DecimalAsFloat      # Rand
     exit_price: DecimalAsFloat | None  # Rand
-    quantity: int
+    quantity: DecimalAsFloat
     pnl: DecimalAsFloat | None       # Rand, net
     return_pct: DecimalAsFloat | None
     reason: str | None

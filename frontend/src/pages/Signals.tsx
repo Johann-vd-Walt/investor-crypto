@@ -40,7 +40,7 @@ function SignalCard({ sig }: { sig: Signal }) {
 
       {sig.direction !== 'HOLD' && (
         <div className="signal-trade">
-          entry {fmt(sig.suggested_entry, 2, '$')} · stop {fmt(sig.suggested_stop, 2, '$')} · size {sig.suggested_size ?? '—'}
+          entry {fmt(sig.suggested_entry, 2, '$')} · stop {fmt(sig.suggested_stop, 2, '$')} · size {sig.suggested_size != null ? sig.suggested_size.toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}
           <span className="muted"> (horizon {sig.horizon_days}d)</span>
         </div>
       )}

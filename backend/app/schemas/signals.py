@@ -29,7 +29,7 @@ class SignalOut(BaseModel):
     sentiment_score: DecimalAsFloat | None
     suggested_entry: DecimalAsFloat | None  # Rand
     suggested_stop: DecimalAsFloat | None   # Rand
-    suggested_size: int | None
+    suggested_size: DecimalAsFloat | None  # fractional units
     rationale: dict | None
     status: SignalStatus
 

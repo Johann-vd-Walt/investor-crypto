@@ -260,7 +260,8 @@ class Signal(Base):
     sentiment_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
     suggested_entry: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     suggested_stop: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
-    suggested_size: Mapped[int | None] = mapped_column(INTEGER, nullable=True)
+    # Fractional — crypto positions are not whole units.
+    suggested_size: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     rationale: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[SignalStatus] = mapped_column(
         Enum(SignalStatus, native_enum=True),
@@ -302,7 +303,7 @@ class Trade(Base):
     side: Mapped[TradeSide] = mapped_column(
         Enum(TradeSide, native_enum=True), nullable=False
     )
-    quantity: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     fees: Mapped[Decimal] = mapped_column(
         Numeric(24, 10), nullable=False, server_default=text("0")
@@ -331,7 +332,7 @@ class PaperTrade(Base):
     )
     entry_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     entry_price: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
-    quantity: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     stop_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     exit_datetime: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)

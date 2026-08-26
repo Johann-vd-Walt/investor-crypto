@@ -37,10 +37,10 @@ class BacktestTrade:
     ticker: str
     entry_datetime: datetime
     exit_datetime: datetime | None
-    entry_price: Decimal   # cents
-    exit_price: Decimal | None  # cents
-    quantity: int
-    pnl: Decimal | None    # net cents
+    entry_price: Decimal   # native quote units
+    exit_price: Decimal | None
+    quantity: Decimal      # fractional
+    pnl: Decimal | None    # net
     return_pct: float | None
     reason: str | None     # "stop" | "horizon" | "open_at_end"
 

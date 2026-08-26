@@ -21,7 +21,7 @@ class PaperTradeOut(BaseModel):
     ticker: str
     entry_datetime: datetime
     entry_price: DecimalAsFloat        # Rand
-    quantity: int
+    quantity: DecimalAsFloat
     stop_price: DecimalAsFloat | None  # Rand
     exit_datetime: datetime | None
     exit_price: DecimalAsFloat | None  # Rand

@@ -18,8 +18,8 @@ from app.schemas.common import DecimalAsFloat
 class TradeCreate(BaseModel):
     ticker: str = Field(..., min_length=1, max_length=12)
     side: TradeSide
-    quantity: int = Field(..., gt=0)
-    price: Decimal = Field(..., ge=0, description="Per-share price in RAND")
+    quantity: Decimal = Field(..., gt=0, description="Units (fractional allowed)")
+    price: Decimal = Field(..., ge=0, description="Per-unit price in the quote currency")
     fees: Decimal = Field(default=Decimal(0), ge=0, description="Total fees in RAND")
     trade_datetime: datetime
     linked_signal_id: int | None = None
@@ -31,7 +31,7 @@ class TradeOut(BaseModel):
     security_id: int
     ticker: str
     side: TradeSide
-    quantity: int
+    quantity: DecimalAsFloat
     price: DecimalAsFloat   # Rand
     fees: DecimalAsFloat    # Rand
     trade_datetime: datetime
@@ -50,11 +50,11 @@ class TradeListResponse(BaseModel):
 class DisposalOut(BaseModel):
     ticker: str
     sell_datetime: datetime
-    quantity: int
+    quantity: DecimalAsFloat
     proceeds: DecimalAsFloat     # Rand, net of sell fees
     base_cost: DecimalAsFloat    # Rand, incl. buy fees
     gain: DecimalAsFloat         # Rand
-    unmatched_quantity: int
+    unmatched_quantity: DecimalAsFloat
 
 
 class TaxSummaryResponse(BaseModel):

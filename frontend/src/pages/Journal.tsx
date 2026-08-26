@@ -113,7 +113,7 @@ export default function Journal() {
           <option value="BUY">Buy</option>
           <option value="SELL">Sell</option>
         </select>
-        <input type="number" placeholder="Qty" value={form.quantity} onChange={set('quantity')} style={{ width: '5rem' }} min="1" />
+        <input type="number" placeholder="Qty (e.g. 0.5)" value={form.quantity} onChange={set('quantity')} style={{ width: '6rem' }} min="0" step="any" />
         <input type="number" placeholder="Price ($)" value={form.price} onChange={set('price')} style={{ width: '7rem' }} step="any" min="0" />
         <input type="number" placeholder="Fees ($)" value={form.fees} onChange={set('fees')} style={{ width: '6rem' }} step="any" min="0" />
         <input type="datetime-local" value={form.trade_datetime} onChange={set('trade_datetime')} />
@@ -133,7 +133,7 @@ export default function Journal() {
                 <td>{new Date(t.trade_datetime).toLocaleDateString()}</td>
                 <td><strong>{t.ticker}</strong></td>
                 <td>{t.side}</td>
-                <td>{t.quantity}</td>
+                <td>{t.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                 <td>{rands(t.price)}</td>
                 <td>{rands(t.fees)}</td>
                 <td>{t.rationale ?? '—'}</td>
@@ -175,9 +175,9 @@ export default function Journal() {
               <tbody>
                 {tax.data.disposals.map((d, i) => (
                   <tr key={i}>
-                    <td><strong>{d.ticker}</strong>{d.unmatched_quantity > 0 && <span className="muted"> ({d.unmatched_quantity} unmatched)</span>}</td>
+                    <td><strong>{d.ticker}</strong>{d.unmatched_quantity > 0 && <span className="muted"> ({d.unmatched_quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })} unmatched)</span>}</td>
                     <td>{new Date(d.sell_datetime).toLocaleDateString()}</td>
-                    <td>{d.quantity}</td>
+                    <td>{d.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                     <td>{rands(d.proceeds)}</td>
                     <td>{rands(d.base_cost)}</td>
                     <td className={d.gain >= 0 ? 'pnl-pos' : 'pnl-neg'}>{rands(d.gain)}</td>

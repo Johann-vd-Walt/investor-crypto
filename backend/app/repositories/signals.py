@@ -5,10 +5,25 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Signal, SignalDirection, SignalStatus
+
+
+def supersede_open(db: Session, *, security_id: int) -> int:
+    """Expire any still-OPEN signals for a security before a fresh one is written.
+
+    Keeps at most one OPEN signal per coin (the latest), so the Signals page and
+    the bot see one current read instead of a pile of duplicates. ACTED/DISMISSED
+    signals are left untouched (history preserved).
+    """
+    result = db.execute(
+        update(Signal)
+        .where(Signal.security_id == security_id, Signal.status == SignalStatus.OPEN)
+        .values(status=SignalStatus.EXPIRED)
+    )
+    return int(result.rowcount or 0)
 
 
 def create(db: Session, draft) -> Signal:

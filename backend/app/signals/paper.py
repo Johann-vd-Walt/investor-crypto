@@ -105,7 +105,7 @@ def net_pnl(
     *,
     entry_price: Decimal,
     exit_price: Decimal,
-    quantity: int,
+    quantity: Decimal,
     costs: Costs,
 ) -> Decimal:
     """Net P&L in cents = gross - brokerage/slippage (both sides) - STT (buy)."""
@@ -114,6 +114,6 @@ def net_pnl(
     return gross - total_costs
 
 
-def unrealized_pnl(*, entry_price: Decimal, current_price: Decimal, quantity: int) -> Decimal:
+def unrealized_pnl(*, entry_price: Decimal, current_price: Decimal, quantity: Decimal) -> Decimal:
     """Gross mark-to-market for an open trade (cents). Costs applied on close."""
     return (current_price - entry_price) * quantity

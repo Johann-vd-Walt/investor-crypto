@@ -144,7 +144,7 @@ export default function PaperPerformance() {
                 <td><strong>{t.ticker}</strong></td>
                 <td>{t.status}</td>
                 <td>{rands(t.entry_price)}<br /><span className="muted">{new Date(t.entry_datetime).toLocaleDateString()}</span></td>
-                <td>{t.quantity}</td>
+                <td>{t.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                 <td>{t.exit_price ? rands(t.exit_price) : '—'}</td>
                 <td className={t.pnl != null ? (t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg') : ''}>{rands(t.pnl)}</td>
                 <td className={t.unrealized_pnl != null ? (t.unrealized_pnl >= 0 ? 'pnl-pos' : 'pnl-neg') : ''}>{rands(t.unrealized_pnl)}</td>
