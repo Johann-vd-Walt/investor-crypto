@@ -62,7 +62,7 @@ def ingest_daily_prices(
     lookback_days: int = 365,
     db: Session | None = None,
 ) -> dict:
-    """Pull EOD daily bars for the given tickers (default: the watchlist).
+    """Pull EOD daily bars for the given tickers (default: all active securities).
 
     Returns a summary dict. Never raises for a single security's failure — it
     records the failure and moves on (Guardrail 2.7).
@@ -84,7 +84,10 @@ def ingest_daily_prices(
         for t in unknown:
             logger.warning("ingest_daily_prices: unknown ticker %s (skipped)", t)
     else:
-        targets = [e.security for e in watchlist_repo.list_entries(db)]
+        # Default: the whole active universe (not just the watchlist), so every
+        # coin stays fresh for the scanner/bot. The watchlist is a UI shortcut.
+        items, _total = securities_repo.list_securities(db, active=True, limit=1000)
+        targets = list(items)
 
     summary = {
         "provider": provider.name,
@@ -402,11 +405,11 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
         if tickers:
             targets = [s for t in tickers if (s := securities_repo.get_by_ticker(db, t))]
         else:
-            targets = [e.security for e in watchlist_repo.list_entries(db)]
-            if not targets:
-                ids = prices_repo.security_ids_with_bars(db)
-                targets = [securities_repo.get_by_id(db, i) for i in ids]
-                targets = [t for t in targets if t]
+            # Default: score the whole universe (every coin with price history),
+            # so the bot gets a fresh daily menu across all coins, not just the
+            # watchlist. The watchlist is a UI favourites list, not a limiter.
+            ids = prices_repo.security_ids_with_bars(db)
+            targets = [s for i in ids if (s := securities_repo.get_by_id(db, i))]
         summary["targets"] = len(targets)
         summary["skipped_illiquid"] = 0
         summary["capped"] = 0
