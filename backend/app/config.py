@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     #   SoSoValue (spot BTC/ETH ETF net flows)   — https://sosovalue.com/developer
     fred_api_key: str = Field(default="", alias="FRED_API_KEY")
     sosovalue_api_key: str = Field(default="", alias="SOSOVALUE_API_KEY")
+    # Luno exchange keys for LIVE trading (blank = live trading impossible).
+    # Real money — only set these when you intend to trade for real.
+    luno_api_key_id: str = Field(default="", alias="LUNO_API_KEY_ID")
+    luno_api_key_secret: str = Field(default="", alias="LUNO_API_KEY_SECRET")
 
     # App
     app_env: str = Field(default="development", alias="APP_ENV")

@@ -1,10 +1,15 @@
-"""Real-time PAPER trading bot endpoints. Simulated only — no real orders."""
+"""Trading bot endpoints — PAPER by default, optional LIVE on Luno.
+
+Live trading is gated: real orders require mode=live, dry_run=off, Luno keys in
+the server env, and the per-order/daily caps. Switching mode/dry-run is done here
+but the app never arms live-real on its own.
+"""
 
 from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,22 +19,35 @@ from app.db.models import BotEquity, BotEvent, BotPosition, Security
 from app.db.session import get_db
 from app.schemas.bot import (
     BotEquityPoint, BotEventOut, BotPositionOut, BotResponse, BotStatusOut,
+    CapsUpdate, DryRunUpdate, LunoStatusOut, ModeUpdate,
 )
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
 
-_NOTE = (
-    "PAPER bot: simulated fills against live prices — no real orders, no exchange "
-    "keys, no real money. The backtests show no established edge (Deflated Sharpe "
-    "~22%) and buy-and-hold beat the strategy, so treat a rising curve with "
-    "scepticism and a falling one as the expected result."
+_NOTE_PAPER = (
+    "PAPER bot: simulated fills against live prices — no real orders, no real money. "
+    "The backtests show no established edge (Deflated Sharpe ~22%) and buy-and-hold "
+    "beat the strategy, so treat a rising curve with scepticism."
+)
+_NOTE_LIVE_DRY = (
+    "LIVE · DRY-RUN: connected to Luno for pricing/balances but placing NO real "
+    "orders — it logs the exact order it would send. Flip dry-run off to trade for real."
+)
+_NOTE_LIVE_REAL = (
+    "⚠ LIVE · REAL MONEY: this bot is placing real orders on your Luno account, "
+    "capped per-order and per-day. The strategy has no proven edge — expect losses. "
+    "Kill switch: set mode back to Paper, or Stop."
 )
 
 
 def _build_response(db: Session) -> BotResponse:
     st = engine.ensure_state(db)
+    luno_ok = engine.get_broker() is not None
+    venue = "luno" if st.mode == "live" else "paper"
 
-    open_pos = list(db.scalars(select(BotPosition).where(BotPosition.status == "OPEN")).all())
+    open_pos = list(db.scalars(
+        select(BotPosition).where(BotPosition.status == "OPEN", BotPosition.venue == venue)
+    ).all())
     sec_by_id = {
         s.id: s for s in db.scalars(
             select(Security).where(Security.id.in_([p.security_id for p in open_pos]))
@@ -52,14 +70,16 @@ def _build_response(db: Session) -> BotResponse:
         positions.append(BotPositionOut(
             ticker=sec.ticker, name=sec.name, entry_datetime=p.entry_datetime,
             entry_price=p.entry_price, quantity=p.quantity, stop_price=p.stop_price,
-            live_price=live, cost_basis=p.cost_basis, market_value=mv,
+            live_price=live, cost_basis=p.cost_basis, venue=p.venue, market_value=mv,
             unrealized_pnl=upnl, unrealized_pct=upct,
         ))
 
     ret_pct = (float(equity) / float(st.initial_cash) - 1.0) * 100.0 if st.initial_cash else 0.0
     status = BotStatusOut(
-        enabled=st.enabled, tick_seconds=st.tick_seconds, initial_cash=st.initial_cash,
-        cash=st.cash, realized_pnl=st.realized_pnl, equity=equity, return_pct=ret_pct,
+        enabled=st.enabled, tick_seconds=st.tick_seconds, mode=st.mode, dry_run=st.dry_run,
+        max_order_usd=st.max_order_usd, daily_cap_usd=st.daily_cap_usd, daily_spent_usd=st.daily_spent_usd,
+        luno_configured=luno_ok, initial_cash=st.initial_cash, cash=st.cash,
+        realized_pnl=st.realized_pnl, equity=equity, return_pct=ret_pct,
         open_positions=len(positions), started_at=st.started_at, last_tick_at=st.last_tick_at,
     )
 
@@ -67,14 +87,13 @@ def _build_response(db: Session) -> BotResponse:
         BotEventOut(created_at=e.created_at, kind=e.kind, ticker=e.ticker, detail=e.detail, equity=e.equity)
         for e in db.scalars(select(BotEvent).order_by(BotEvent.created_at.desc()).limit(80)).all()
     ]
-
     rows = list(db.scalars(select(BotEquity).order_by(BotEquity.ts)).all())
-    if len(rows) > 400:  # downsample to keep the payload light
-        stride = len(rows) // 400 + 1
-        rows = rows[::stride]
+    if len(rows) > 400:
+        rows = rows[::len(rows) // 400 + 1]
     curve = [BotEquityPoint(ts=r.ts, equity=r.equity) for r in rows]
 
-    return BotResponse(status=status, positions=positions, events=events, equity_curve=curve, note=_NOTE)
+    note = _NOTE_PAPER if st.mode == "paper" else (_NOTE_LIVE_DRY if st.dry_run else _NOTE_LIVE_REAL)
+    return BotResponse(status=status, positions=positions, events=events, equity_curve=curve, note=note)
 
 
 @router.get("", response_model=BotResponse)
@@ -98,3 +117,30 @@ def stop_bot(db: Session = Depends(get_db)) -> BotResponse:
 def reset_bot(db: Session = Depends(get_db)) -> BotResponse:
     engine.reset(db)
     return _build_response(db)
+
+
+@router.post("/mode", response_model=BotResponse)
+def set_mode(payload: ModeUpdate, db: Session = Depends(get_db)) -> BotResponse:
+    try:
+        engine.set_mode(db, payload.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _build_response(db)
+
+
+@router.post("/dry-run", response_model=BotResponse)
+def set_dry_run(payload: DryRunUpdate, db: Session = Depends(get_db)) -> BotResponse:
+    engine.set_dry_run(db, payload.dry_run)
+    return _build_response(db)
+
+
+@router.post("/caps", response_model=BotResponse)
+def set_caps(payload: CapsUpdate, db: Session = Depends(get_db)) -> BotResponse:
+    engine.set_caps(db, max_order_usd=payload.max_order_usd, daily_cap_usd=payload.daily_cap_usd)
+    return _build_response(db)
+
+
+@router.get("/luno", response_model=LunoStatusOut)
+def luno_status() -> LunoStatusOut:
+    """Read-only Luno connection + balances (no orders placed)."""
+    return LunoStatusOut(**engine.luno_status())

@@ -399,6 +399,21 @@ class BotState(Base):
     id: Mapped[int] = mapped_column(UInt, primary_key=True)  # singleton, always 1
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
     tick_seconds: Mapped[int] = mapped_column(INTEGER, nullable=False, server_default=text("60"))
+    # Live trading controls (default = safe). 'paper' simulates; 'live' talks to
+    # Luno but only places REAL orders when dry_run is off AND keys exist AND caps
+    # allow. dry_run defaults True so 'live' first just logs intended orders.
+    mode: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'paper'"))
+    dry_run: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("1"))
+    max_order_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, server_default=text("20")
+    )
+    daily_cap_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, server_default=text("100")
+    )
+    daily_spent_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, server_default=text("0")
+    )
+    daily_spent_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     initial_cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     realized_pnl: Mapped[Decimal] = mapped_column(
@@ -432,6 +447,9 @@ class BotPosition(Base):
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     pnl: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)  # realized, net
     exit_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 'paper' (simulated) or 'luno' (real). Real positions carry the Luno order id.
+    venue: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'paper'"))
+    luno_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class BotEvent(Base):

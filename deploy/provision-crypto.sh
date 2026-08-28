@@ -126,6 +126,14 @@ FRED_API_KEY=
 # SoSoValue: spot BTC/ETH ETF net flows. https://sosovalue.com/developer
 SOSOVALUE_API_KEY=
 
+# ---- Luno keys for LIVE trading (REAL MONEY — leave blank for paper-only) ----
+# Only set these when you intend to trade for real. Create a key at
+# https://www.luno.com/wallet/security/api_keys with TRADE (orders) + BALANCE
+# read permission (NOT withdraw/send). The bot still starts in paper/dry-run;
+# real orders require you to explicitly arm them in the app.
+LUNO_API_KEY_ID=
+LUNO_API_KEY_SECRET=
+
 # ---- Other optional keys (safe to leave blank) ----
 MARKETAUX_API_KEY=
 EODHD_API_KEY=

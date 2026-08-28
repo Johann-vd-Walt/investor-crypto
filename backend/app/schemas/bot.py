@@ -18,6 +18,7 @@ class BotPositionOut(BaseModel):
     stop_price: DecimalAsFloat | None
     live_price: DecimalAsFloat | None
     cost_basis: DecimalAsFloat
+    venue: str
     market_value: DecimalAsFloat | None
     unrealized_pnl: DecimalAsFloat | None
     unrealized_pct: DecimalAsFloat | None
@@ -39,6 +40,12 @@ class BotEquityPoint(BaseModel):
 class BotStatusOut(BaseModel):
     enabled: bool
     tick_seconds: int
+    mode: str                    # 'paper' | 'live'
+    dry_run: bool
+    max_order_usd: DecimalAsFloat
+    daily_cap_usd: DecimalAsFloat
+    daily_spent_usd: DecimalAsFloat
+    luno_configured: bool         # keys present in server env
     initial_cash: DecimalAsFloat
     cash: DecimalAsFloat
     realized_pnl: DecimalAsFloat
@@ -49,9 +56,35 @@ class BotStatusOut(BaseModel):
     last_tick_at: datetime | None
 
 
+class LunoBalance(BaseModel):
+    asset: str
+    balance: float
+    available: float
+    reserved: float
+
+
+class LunoStatusOut(BaseModel):
+    configured: bool
+    error: str | None
+    balances: list[LunoBalance]
+
+
 class BotResponse(BaseModel):
     status: BotStatusOut
     positions: list[BotPositionOut]
     events: list[BotEventOut]
     equity_curve: list[BotEquityPoint]
     note: str
+
+
+class ModeUpdate(BaseModel):
+    mode: str
+
+
+class DryRunUpdate(BaseModel):
+    dry_run: bool
+
+
+class CapsUpdate(BaseModel):
+    max_order_usd: DecimalAsFloat | None = None
+    daily_cap_usd: DecimalAsFloat | None = None

@@ -492,9 +492,23 @@ export interface BotPosition {
   stop_price: number | null
   live_price: number | null
   cost_basis: number
+  venue: string
   market_value: number | null
   unrealized_pnl: number | null
   unrealized_pct: number | null
+}
+
+export interface LunoBalance {
+  asset: string
+  balance: number
+  available: number
+  reserved: number
+}
+
+export interface LunoStatus {
+  configured: boolean
+  error: string | null
+  balances: LunoBalance[]
 }
 
 export interface BotEvent {
@@ -508,6 +522,12 @@ export interface BotEvent {
 export interface BotStatus {
   enabled: boolean
   tick_seconds: number
+  mode: string
+  dry_run: boolean
+  max_order_usd: number
+  daily_cap_usd: number
+  daily_spent_usd: number
+  luno_configured: boolean
   initial_cash: number
   cash: number
   realized_pnl: number
@@ -637,6 +657,13 @@ export const api = {
   startBot: () => request<BotResponse>('/api/bot/start', { method: 'POST' }),
   stopBot: () => request<BotResponse>('/api/bot/stop', { method: 'POST' }),
   resetBot: () => request<BotResponse>('/api/bot/reset', { method: 'POST' }),
+  setBotMode: (mode: string) =>
+    request<BotResponse>('/api/bot/mode', { method: 'POST', body: JSON.stringify({ mode }) }),
+  setBotDryRun: (dry_run: boolean) =>
+    request<BotResponse>('/api/bot/dry-run', { method: 'POST', body: JSON.stringify({ dry_run }) }),
+  setBotCaps: (caps: { max_order_usd?: number; daily_cap_usd?: number }) =>
+    request<BotResponse>('/api/bot/caps', { method: 'POST', body: JSON.stringify(caps) }),
+  getLunoStatus: () => request<LunoStatus>('/api/bot/luno'),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>
