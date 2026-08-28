@@ -110,7 +110,9 @@ def ensure_state(db: Session) -> BotState:
     if st is None:
         settings = settings_service.get_effective_settings(db)
         cash = Decimal(settings.account_size)
-        st = BotState(id=1, enabled=False, tick_seconds=60,
+        st = BotState(id=1, enabled=False, tick_seconds=60, mode="paper", dry_run=True,
+                      max_order_usd=Decimal("20"), daily_cap_usd=Decimal("100"),
+                      daily_spent_usd=Decimal("0"),
                       initial_cash=cash, cash=cash, realized_pnl=Decimal(0))
         db.add(st)
         db.commit()
