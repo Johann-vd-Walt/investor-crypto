@@ -438,6 +438,31 @@ export interface AccessLogResponse {
   events: AuthEvent[]
 }
 
+export interface Mover {
+  ticker: string
+  name: string
+  last_close: number
+  live_price: number
+  change_pct: number
+  luno: boolean
+}
+
+export interface MostBought {
+  ticker: string
+  pair: string
+  base: string
+  buy_vol: number
+  sell_vol: number
+  buy_pct: number
+  trades: number
+}
+
+export interface MoversResponse {
+  top_movers: Mover[]
+  most_bought: MostBought[]
+  note: string
+}
+
 export type PositioningTone = 'bull' | 'bear' | 'warn' | 'neutral'
 
 export interface PositioningSignal {
@@ -660,6 +685,8 @@ export const api = {
 
   getAccessLog: (limit = 200) =>
     request<AccessLogResponse>(`/api/security/access-log?limit=${limit}`),
+
+  getMovers: () => request<MoversResponse>('/api/market/movers'),
 
   getPositioning: () => request<PositioningListResponse>('/api/positioning'),
   getPositioningFor: (ticker: string) =>

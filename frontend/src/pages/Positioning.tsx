@@ -3,6 +3,69 @@ import { Link } from 'react-router-dom'
 import { api, type PositioningTone } from '../api/client'
 import Explainer from '../components/Explainer'
 
+function Movers() {
+  const q = useQuery({ queryKey: ['movers'], queryFn: api.getMovers, refetchInterval: 60_000 })
+  if (!q.data) return null
+  const gainers = q.data.top_movers.slice(0, 6)
+  const losers = [...q.data.top_movers].reverse().slice(0, 6)
+  const bought = q.data.most_bought.slice(0, 8)
+
+  const chgColor = (n: number) => (n >= 0 ? '#22c55e' : '#ef4444')
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <h2 style={{ marginBottom: '0.25rem' }}>Market movers</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+        <div style={{ border: '1px solid #334155', borderRadius: 8, padding: '0.75rem' }}>
+          <h3 style={{ marginTop: 0 }}>Top movers today <span className="muted" style={{ fontSize: '0.7em' }}>(live vs last close)</span></h3>
+          <table><tbody>
+            {gainers.map((m) => (
+              <tr key={m.ticker}>
+                <td><Link to={`/security/${m.ticker}`}><strong>{m.ticker.replace('USDT', '')}</strong></Link>{m.luno && <span title="Tradeable on Luno" style={{ color: '#58a6ff', fontSize: '0.7em' }}> ●</span>}</td>
+                <td style={{ color: chgColor(m.change_pct), textAlign: 'right' }}>{m.change_pct >= 0 ? '+' : ''}{m.change_pct.toFixed(2)}%</td>
+              </tr>
+            ))}
+          </tbody></table>
+          <div style={{ color: '#64748b', fontSize: '0.72rem', margin: '0.4rem 0 0.1rem' }}>Biggest fallers</div>
+          <table><tbody>
+            {losers.map((m) => (
+              <tr key={m.ticker}>
+                <td><Link to={`/security/${m.ticker}`}>{m.ticker.replace('USDT', '')}</Link>{m.luno && <span style={{ color: '#58a6ff', fontSize: '0.7em' }}> ●</span>}</td>
+                <td style={{ color: chgColor(m.change_pct), textAlign: 'right' }}>{m.change_pct >= 0 ? '+' : ''}{m.change_pct.toFixed(2)}%</td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+
+        <div style={{ border: '1px solid #334155', borderRadius: 8, padding: '0.75rem' }}>
+          <h3 style={{ marginTop: 0 }}>Most bought on Luno <span className="muted" style={{ fontSize: '0.7em' }}>(recent buy pressure)</span></h3>
+          <table>
+            <thead><tr><th>Coin</th><th>Buys</th><th></th><th>Trades</th></tr></thead>
+            <tbody>
+              {bought.map((m) => (
+                <tr key={m.ticker}>
+                  <td><Link to={`/security/${m.ticker}`}><strong>{m.base}</strong></Link></td>
+                  <td style={{ color: m.buy_pct >= 50 ? '#22c55e' : '#ef4444' }}>{m.buy_pct.toFixed(0)}%</td>
+                  <td>
+                    <div style={{ display: 'flex', width: 90, height: 10, borderRadius: 3, overflow: 'hidden', background: '#7f1d1d' }}>
+                      <div style={{ width: `${m.buy_pct}%`, background: '#14532d' }} />
+                    </div>
+                  </td>
+                  <td style={{ color: '#64748b' }}>{m.trades}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted" style={{ fontSize: '0.72rem', marginBottom: 0 }}>
+            % of recent trades that were buys, on Luno's public feed. Low trade counts = weak signal.
+            Luno has no official "most bought" API — this is the recent window, not a full 24h.
+          </p>
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: '0.72rem' }}>● = tradeable on Luno in USDT. Movers cover all coins; most-bought is Luno-only.</p>
+    </div>
+  )
+}
+
 const TONE_STYLE: Record<PositioningTone, { bg: string; label: string }> = {
   bull: { bg: '#14532d', label: 'bullish' },
   bear: { bg: '#7f1d1d', label: 'bearish' },
@@ -51,6 +114,8 @@ export default function Positioning() {
         adapt as regimes drift. History builds up over time as the collector runs a few times
         a day.</p>
       </Explainer>
+
+      <Movers />
 
       {q.isLoading && <p>Loading…</p>}
       {q.isError && <p className="error" role="alert">Could not load positioning. Is the backend running?</p>}

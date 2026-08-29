@@ -24,6 +24,7 @@ from app.api import (
     routes_freshness,
     routes_health,
     routes_macro,
+    routes_market,
     routes_news,
     routes_paper,
     routes_pine,
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_positioning.router)
     app.include_router(routes_consensus.router)
     app.include_router(routes_bot.router)
+    app.include_router(routes_market.router)
     return app
 
 
