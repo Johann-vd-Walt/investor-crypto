@@ -86,6 +86,7 @@ def live_performance(db: Session) -> Performance:
         .where(
             BotPosition.status == "CLOSED",
             BotPosition.venue == "luno",
+            BotPosition.luno_order_id.is_not(None),  # real orders only, not dry-run
             BotPosition.pnl.is_not(None),
         )
         .order_by(BotPosition.exit_datetime)

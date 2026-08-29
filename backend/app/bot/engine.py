@@ -179,6 +179,8 @@ def set_mode(db: Session, mode: str) -> BotState:
     if mode == "live" and get_broker() is None:
         raise ValueError("No Luno API keys on the server. Set LUNO_API_KEY_ID and "
                          "LUNO_API_KEY_SECRET in backend/.env, then restart.")
+    if mode == "live":
+        st.live_start_equity = None  # recapture the live baseline on the next tick
     st.mode = mode
     note = "PAPER (simulated)" if mode == "paper" else ("LIVE · DRY-RUN" if st.dry_run else "LIVE · REAL MONEY")
     _log(db, "info", f"Mode -> {note}")
@@ -414,6 +416,8 @@ def tick(db: Session) -> dict:
     for p in db.scalars(select(BotPosition).where(BotPosition.status == "OPEN", BotPosition.venue == venue)).all():
         m = prices.get(id_to_ticker.get(p.security_id))
         equity += p.quantity * (m if m is not None else p.entry_price)
+    if live and st.live_start_equity is None:
+        st.live_start_equity = equity  # anchor live return % to the real account
     st.last_equity = equity
     st.last_tick_at = now
     db.add(BotEquity(ts=now, equity=equity, cash=st.cash))

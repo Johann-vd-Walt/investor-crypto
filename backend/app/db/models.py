@@ -414,6 +414,9 @@ class BotState(Base):
         Numeric(18, 2), nullable=False, server_default=text("0")
     )
     daily_spent_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Live equity baseline (USDT + positions) captured when live mode starts, so
+    # live return % is measured from the real account, not the paper starting cash.
+    live_start_equity: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
     initial_cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     cash: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
     realized_pnl: Mapped[Decimal] = mapped_column(

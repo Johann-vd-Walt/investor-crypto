@@ -13,14 +13,17 @@ from sqlalchemy.orm import Session
 from app.db.models import BotPosition
 
 
-def venue_stats(db: Session, venue: str) -> dict:
-    rows = list(db.scalars(
-        select(BotPosition).where(
-            BotPosition.status == "CLOSED",
-            BotPosition.venue == venue,
-            BotPosition.pnl.is_not(None),
-        )
-    ).all())
+def venue_stats(db: Session, venue: str, *, real_only: bool = False) -> dict:
+    """Closed-trade stats for a venue. ``real_only`` (live) counts only positions
+    with a Luno order id — i.e. actual real orders, not dry-run simulations."""
+    conds = [
+        BotPosition.status == "CLOSED",
+        BotPosition.venue == venue,
+        BotPosition.pnl.is_not(None),
+    ]
+    if real_only:
+        conds.append(BotPosition.luno_order_id.is_not(None))
+    rows = list(db.scalars(select(BotPosition).where(*conds)).all())
     n = len(rows)
     if n == 0:
         return {"venue": venue, "sample": 0, "wins": 0, "win_rate": None,
@@ -36,4 +39,5 @@ def venue_stats(db: Session, venue: str) -> dict:
 
 
 def all_stats(db: Session) -> dict:
-    return {"paper": venue_stats(db, "paper"), "luno": venue_stats(db, "luno")}
+    # 'luno' track record = REAL orders only (dry-run sims excluded).
+    return {"paper": venue_stats(db, "paper"), "luno": venue_stats(db, "luno", real_only=True)}
