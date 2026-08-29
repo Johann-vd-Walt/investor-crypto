@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, type TaxSummary, type TradeSide } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDate } from '../format'
 
 function rands(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
@@ -130,7 +131,7 @@ export default function Journal() {
           <tbody>
             {trades.data.items.map((t) => (
               <tr key={t.id}>
-                <td>{new Date(t.trade_datetime).toLocaleDateString()}</td>
+                <td>{fmtDate(t.trade_datetime)}</td>
                 <td><strong>{t.ticker}</strong></td>
                 <td>{t.side}</td>
                 <td>{t.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
@@ -176,7 +177,7 @@ export default function Journal() {
                 {tax.data.disposals.map((d, i) => (
                   <tr key={i}>
                     <td><strong>{d.ticker}</strong>{d.unmatched_quantity > 0 && <span className="muted"> ({d.unmatched_quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })} unmatched)</span>}</td>
-                    <td>{new Date(d.sell_datetime).toLocaleDateString()}</td>
+                    <td>{fmtDate(d.sell_datetime)}</td>
                     <td>{d.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                     <td>{rands(d.proceeds)}</td>
                     <td>{rands(d.base_cost)}</td>

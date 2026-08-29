@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDate } from '../format'
 
 export default function Watchlist() {
   const qc = useQueryClient()
@@ -110,7 +111,7 @@ export default function Watchlist() {
                 <td>{item.security.name}</td>
                 <td>{item.security.sector ?? '—'}</td>
                 <td>{item.notes ?? '—'}</td>
-                <td>{new Date(item.added_at).toLocaleDateString()}</td>
+                <td>{fmtDate(item.added_at)}</td>
                 <td>
                   <button
                     className="link"

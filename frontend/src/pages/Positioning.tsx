@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, type PositioningTone } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDateTime } from '../format'
 
 function Movers() {
   const q = useQuery({ queryKey: ['movers'], queryFn: api.getMovers, refetchInterval: 60_000 })
@@ -133,7 +134,7 @@ export default function Positioning() {
               <Link to={`/security/${snap.ticker}`}>{snap.ticker}</Link>
             </h2>
             <span style={{ color: '#94a3b8' }}>{snap.name}</span>
-            {snap.as_of && <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto' }}>as of {new Date(snap.as_of).toLocaleString()}</span>}
+            {snap.as_of && <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto' }}>as of {fmtDateTime(snap.as_of)}</span>}
           </div>
 
           {!snap.available && <p style={{ color: '#94a3b8' }}>{snap.note}</p>}

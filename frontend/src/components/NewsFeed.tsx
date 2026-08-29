@@ -1,4 +1,5 @@
 import type { NewsArticle } from '../api/client'
+import { fmtDateTime } from '../format'
 
 function SentimentBadge({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null
@@ -36,7 +37,7 @@ export default function NewsFeed({ articles, isLoading, isError, emptyHint }: Pr
           </div>
           <div className="news-meta">
             {a.source}
-            {a.published_at ? ` · ${new Date(a.published_at).toLocaleString()}` : ''}
+            {a.published_at ? ` · ${fmtDateTime(a.published_at)}` : ''}
           </div>
           {a.snippet && <p className="news-snippet">{a.snippet}</p>}
         </li>

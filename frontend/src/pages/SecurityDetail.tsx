@@ -6,6 +6,7 @@ import CandlestickChart from '../components/CandlestickChart'
 import DelayedBadge from '../components/DelayedBadge'
 import DirectionBadge from '../components/DirectionBadge'
 import Explainer from '../components/Explainer'
+import { fmtDateTime } from '../format'
 
 const RANGES: { label: string; days: number | null }[] = [
   { label: '1M', days: 30 },
@@ -202,7 +203,7 @@ export default function SecurityDetail() {
                 {s.category && <span className="status">{s.category}</span>}
               </div>
               <div className="news-meta">
-                {s.source}{s.published_at ? ` · ${new Date(s.published_at).toLocaleString()}` : ''}
+                {s.source}{s.published_at ? ` · ${fmtDateTime(s.published_at)}` : ''}
               </div>
             </li>
           ))}

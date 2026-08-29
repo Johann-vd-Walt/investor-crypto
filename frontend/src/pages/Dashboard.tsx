@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type MacroSnapshotItem } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDate, fmtDateTime } from '../format'
 
 function formatValue(item: MacroSnapshotItem): string {
   if (item.value === null) return '—'
@@ -24,7 +25,7 @@ function MacroCard({ item }: { item: MacroSnapshotItem }) {
           <div className="macro-meta">
             {item.unit ? <span>{item.unit}</span> : null}
             <span className="macro-asof">
-              as of {item.as_of ? new Date(item.as_of).toLocaleDateString() : '—'}
+              as of {fmtDate(item.as_of)}
               {item.source ? ` · ${item.source}` : ''}
             </span>
           </div>
@@ -104,7 +105,7 @@ export default function Dashboard() {
                 {s.ticker && <span className="status">{s.ticker}</span>}
               </div>
               <div className="news-meta">
-                {s.source}{s.published_at ? ` · ${new Date(s.published_at).toLocaleString()}` : ''}
+                {s.source}{s.published_at ? ` · ${fmtDateTime(s.published_at)}` : ''}
               </div>
             </li>
           ))}

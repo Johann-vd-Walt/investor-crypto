@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type AuthEventType } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDateTime } from '../format'
 
 const LABEL: Record<AuthEventType, string> = {
   success: '✓ Signed in',
@@ -69,7 +70,7 @@ export default function Security() {
           <tbody>
             {log.data.events.map((e) => (
               <tr key={e.id}>
-                <td>{new Date(e.created_at).toLocaleString()}</td>
+                <td>{fmtDateTime(e.created_at)}</td>
                 <td>{LABEL[e.event] ?? e.event}</td>
                 <td><code>{e.ip ?? '—'}</code></td>
                 <td style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.user_agent ?? ''}>

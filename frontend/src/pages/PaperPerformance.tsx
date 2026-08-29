@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { api, type PaperPerformance } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDate } from '../format'
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -143,7 +144,7 @@ export default function PaperPerformance() {
               <tr key={t.id}>
                 <td><strong>{t.ticker}</strong></td>
                 <td>{t.status}</td>
-                <td>{rands(t.entry_price)}<br /><span className="muted">{new Date(t.entry_datetime).toLocaleDateString()}</span></td>
+                <td>{rands(t.entry_price)}<br /><span className="muted">{fmtDate(t.entry_datetime)}</span></td>
                 <td>{t.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                 <td>{t.exit_price ? rands(t.exit_price) : '—'}</td>
                 <td className={t.pnl != null ? (t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg') : ''}>{rands(t.pnl)}</td>

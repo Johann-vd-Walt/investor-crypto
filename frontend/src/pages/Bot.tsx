@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { api, type BotEvent, type BotResponse } from '../api/client'
 import Explainer from '../components/Explainer'
+import { fmtDateTime, fmtTime } from '../format'
 
 function usd(n: number | null | undefined, dp = 2) {
   if (n === null || n === undefined) return '—'
@@ -96,7 +97,7 @@ export default function Bot() {
         <button className="link" onClick={() => { if (confirm('Reset the PAPER portfolio? (Live positions are untouched.)')) reset.mutate() }} disabled={busy}>Reset paper</button>
         <span style={{ marginLeft: 'auto', color: s?.enabled ? '#22c55e' : '#94a3b8' }}>
           ● {s?.enabled ? 'Running' : 'Stopped'}
-          {s?.last_tick_at && <span style={{ color: '#64748b' }}> · last tick {new Date(s.last_tick_at).toLocaleTimeString()}</span>}
+          {s?.last_tick_at && <span style={{ color: '#64748b' }}> · last tick {fmtTime(s.last_tick_at)}</span>}
         </span>
       </div>
 
@@ -211,7 +212,7 @@ export default function Bot() {
           <h2 className="section-title">Equity curve</h2>
           <div style={{ width: '100%', height: 240 }}>
             <ResponsiveContainer>
-              <LineChart data={q.data.equity_curve.map((p) => ({ t: new Date(p.ts).toLocaleTimeString(), equity: p.equity }))}>
+              <LineChart data={q.data.equity_curve.map((p) => ({ t: fmtTime(p.ts), equity: p.equity }))}>
                 <CartesianGrid stroke="#21262d" />
                 <XAxis dataKey="t" tick={{ fontSize: 10, fill: '#8b949e' }} stroke="#30363d" minTickGap={40} />
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#8b949e' }} width={70} stroke="#30363d" />
@@ -280,7 +281,7 @@ export default function Bot() {
             <tbody>
               {q.data?.events.map((e: BotEvent, i) => (
                 <tr key={i}>
-                  <td style={{ color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>{new Date(e.created_at).toLocaleString()}</td>
+                  <td style={{ color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>{fmtDateTime(e.created_at)}</td>
                   <td style={{ color: KIND_COLOR[e.kind] ?? '#e6edf3', textTransform: 'uppercase', fontSize: '0.72rem' }}>{e.kind}</td>
                   <td>{e.ticker ?? ''}</td>
                   <td style={{ color: '#cbd5e1' }}>{e.detail}</td>
