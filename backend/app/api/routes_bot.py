@@ -79,8 +79,16 @@ def _build_response(db: Session) -> BotResponse:
     # Venue-specific realised P&L (live shows ONLY real Luno closes — not paper,
     # and not dry-run simulations).
     realized = bot_perf.venue_stats(db, venue, real_only=live)["total_pnl"]
-    # Baseline for return %: live anchors to the real account when live started.
-    baseline = st.live_start_equity if (live and st.live_start_equity) else st.initial_cash
+    # Baseline for return %. In live mode, anchor to the real account: capture it
+    # now if it hasn't been set (so return reads ~0% from the moment you start
+    # tracking live, not -97% against the paper starting cash).
+    if live:
+        if st.live_start_equity is None and equity > 0:
+            st.live_start_equity = equity
+            db.commit()
+        baseline = st.live_start_equity or equity
+    else:
+        baseline = st.initial_cash
     ret_pct = (float(equity) / float(baseline) - 1.0) * 100.0 if baseline else 0.0
     status = BotStatusOut(
         enabled=st.enabled, tick_seconds=st.tick_seconds, mode=st.mode, dry_run=st.dry_run,
