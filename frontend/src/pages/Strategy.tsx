@@ -1,7 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api, type AppSettings } from '../api/client'
+import { api, type AppSettings, type AuditFinding } from '../api/client'
+
+const SEV: Record<AuditFinding['severity'], { bg: string; label: string }> = {
+  critical: { bg: '#7f1d1d', label: 'CRITICAL' },
+  warn: { bg: '#78350f', label: 'WARNING' },
+  good: { bg: '#14532d', label: 'OK' },
+  info: { bg: '#334155', label: 'INFO' },
+}
+const pct = (n: number | null | undefined) => (n == null ? '—' : `${n.toFixed(0)}%`)
 
 type FieldKey = keyof AppSettings
 
@@ -10,6 +18,8 @@ const META: Partial<Record<FieldKey, { label: string; step: string }>> = {
   weight_macro: { label: 'Weight · macro/regime', step: '0.05' },
   weight_sentiment: { label: 'Weight · sentiment', step: '0.05' },
   weight_momentum: { label: 'Weight · momentum', step: '0.05' },
+  weight_flow: { label: 'Weight · flow (real-time)', step: '0.05' },
+  flow_momentum_days: { label: 'Flow lookback (days)', step: '1' },
   buy_threshold: { label: 'Buy threshold', step: '0.05' },
   sell_threshold: { label: 'Sell threshold', step: '0.05' },
   default_horizon_days: { label: 'Hold horizon (days)', step: '1' },
@@ -55,7 +65,7 @@ const SECTIONS: Section[] = [
         knob — small changes reshape everything downstream.</p>
       </>
     ),
-    fields: ['weight_technical', 'weight_macro', 'weight_sentiment', 'weight_momentum', 'buy_threshold', 'sell_threshold', 'default_horizon_days'],
+    fields: ['weight_technical', 'weight_macro', 'weight_sentiment', 'weight_momentum', 'weight_flow', 'buy_threshold', 'sell_threshold', 'default_horizon_days'],
   },
   {
     id: 'technical',
@@ -109,6 +119,25 @@ const SECTIONS: Section[] = [
       </>
     ),
     fields: ['momentum_lookback_days', 'momentum_skip_days'],
+  },
+  {
+    id: 'flow',
+    title: '5b · Real-time flow',
+    tag: 'unbacktestable',
+    body: (
+      <>
+        <p>A short-horizon read of <strong>who's buying right now</strong>: recent price momentum (a
+        few days) plus <strong>taker buy/sell pressure</strong> from the derivatives feed (see
+        <Link to="/positioning"> Positioning</Link> and the Market-movers panel). Positive when a coin
+        is moving up on aggressive buying.</p>
+        <p><strong>Read this honestly:</strong> unlike the other layers, flow <strong>cannot be
+        backtested</strong> — there's no point-in-time history of pressure data — so you're trusting
+        it on faith. And "chasing the movers" frequently buys the top right before it reverses. Keep
+        the weight <strong>modest</strong> (default 0.10). Set it to 0 to ignore real-time flow
+        entirely; raise it if you want the bot to lean into what's being bought <em>now</em>.</p>
+      </>
+    ),
+    fields: ['flow_momentum_days'],
   },
   {
     id: 'risk',
@@ -166,6 +195,8 @@ export default function Strategy() {
     }
   }, [settings.data])
 
+  const audit = useMutation({ mutationFn: api.auditStrategy })
+
   const save = useMutation({
     mutationFn: () => {
       const overrides: Record<string, number> = {}
@@ -180,7 +211,7 @@ export default function Strategy() {
     },
   })
 
-  const wsum = ['weight_technical', 'weight_macro', 'weight_sentiment', 'weight_momentum']
+  const wsum = ['weight_technical', 'weight_macro', 'weight_sentiment', 'weight_momentum', 'weight_flow']
     .reduce((a, k) => a + (Number(form[k]) || 0), 0)
   const weightsOk = Math.abs(wsum - 1) <= 0.001
 
@@ -207,10 +238,44 @@ export default function Strategy() {
       </div>
 
       <p className="muted">
-        The pipeline: four layers → a fused score (−1…+1) → if it clears the buy threshold, a BUY with
+        The pipeline: five layers → a fused score (−1…+1) → if it clears the buy threshold, a BUY with
         an entry, stop and size → the <Link to="/bot">paper bot</Link> / paper-trading acts on it.
         Nothing here is proven to beat simply holding BTC.
       </p>
+
+      {/* Strategy auditor */}
+      <div style={{ border: '1px solid #334155', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <button onClick={() => audit.mutate()} disabled={audit.isPending}>
+            {audit.isPending ? 'Reviewing… (runs a backtest)' : '🔍 Review my strategy'}
+          </button>
+          <span className="muted">Audits your current settings + a fresh backtest + the bot's track record, and tells you honestly what to fix.</span>
+        </div>
+        {audit.isError && <p className="error" style={{ marginTop: '0.75rem' }}>Audit failed.</p>}
+        {audit.data && (
+          <div style={{ marginTop: '1rem' }}>
+            {audit.data.metrics && (
+              <div className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                Momentum backtest: return <strong>{pct(audit.data.metrics.total_return_pct)}</strong> vs
+                hold BTC <strong>{pct(audit.data.metrics.btc_buyhold_pct)}</strong> · Deflated Sharpe{' '}
+                <strong style={{ color: (audit.data.metrics.deflated_sharpe ?? 0) >= 0.95 ? '#22c55e' : '#f59e0b' }}>
+                  {pct((audit.data.metrics.deflated_sharpe ?? 0) * 100)}
+                </strong> · {audit.data.metrics.rebalances} rebalances
+              </div>
+            )}
+            {audit.data.findings.map((f, i) => (
+              <div key={i} style={{ borderLeft: `4px solid ${SEV[f.severity].bg}`, background: '#161b22', borderRadius: 4, padding: '0.6rem 0.85rem', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'baseline' }}>
+                  <span style={{ background: SEV[f.severity].bg, color: '#fff', borderRadius: 3, padding: '1px 7px', fontSize: '0.68rem' }}>{SEV[f.severity].label}</span>
+                  <strong>{f.title}</strong>
+                </div>
+                <div style={{ color: '#cbd5e1', fontSize: '0.9rem', marginTop: '0.25rem' }}>{f.detail}</div>
+                {f.suggestion && <div style={{ color: '#58a6ff', fontSize: '0.85rem', marginTop: '0.2rem' }}>→ {f.suggestion}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {settings.isLoading && <p>Loading…</p>}
 

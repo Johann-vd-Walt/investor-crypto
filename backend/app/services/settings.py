@@ -22,6 +22,8 @@ TUNABLE: dict[str, type] = {
     "weight_macro": float,
     "weight_sentiment": float,
     "weight_momentum": float,
+    "weight_flow": float,
+    "flow_momentum_days": int,
     "buy_threshold": float,
     "sell_threshold": float,
     "default_horizon_days": int,

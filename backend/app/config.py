@@ -92,9 +92,10 @@ class Settings(BaseSettings):
     )
 
     # Signal engine weights (must sum to 1.0)
-    weight_technical: float = Field(default=0.5, alias="WEIGHT_TECHNICAL")
+    # Layer weights (fusion renormalises; defaults sum to 1.0 incl. flow below).
+    weight_technical: float = Field(default=0.45, alias="WEIGHT_TECHNICAL")
     weight_macro: float = Field(default=0.2, alias="WEIGHT_MACRO")
-    weight_sentiment: float = Field(default=0.3, alias="WEIGHT_SENTIMENT")
+    weight_sentiment: float = Field(default=0.25, alias="WEIGHT_SENTIMENT")
     default_horizon_days: int = Field(default=10, alias="DEFAULT_HORIZON_DAYS")
 
     # Fused-score thresholds for direction (score in -1..1).
@@ -124,6 +125,10 @@ class Settings(BaseSettings):
     weight_momentum: float = Field(default=0.0, alias="WEIGHT_MOMENTUM")
     momentum_lookback_days: int = Field(default=90, alias="MOMENTUM_LOOKBACK_DAYS")
     momentum_skip_days: int = Field(default=5, alias="MOMENTUM_SKIP_DAYS")
+    # Real-time FLOW layer: short-term price momentum + taker buy/sell pressure.
+    # UNBACKTESTABLE (no point-in-time pressure history) — keep the weight modest.
+    weight_flow: float = Field(default=0.1, alias="WEIGHT_FLOW")
+    flow_momentum_days: int = Field(default=3, alias="FLOW_MOMENTUM_DAYS")
     # Portfolio caps applied when opening paper trades.
     max_open_positions: int = Field(default=10, alias="MAX_OPEN_POSITIONS")
     max_positions_per_sector: int = Field(default=3, alias="MAX_POSITIONS_PER_SECTOR")

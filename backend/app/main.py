@@ -35,6 +35,7 @@ from app.api import (
     routes_sens,
     routes_settings,
     routes_signals,
+    routes_strategy,
     routes_trades,
     routes_watchlist,
 )
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_consensus.router)
     app.include_router(routes_bot.router)
     app.include_router(routes_market.router)
+    app.include_router(routes_strategy.router)
     return app
 
 

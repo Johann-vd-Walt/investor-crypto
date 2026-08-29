@@ -463,6 +463,11 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
                 df = _price_df(bars_by_id[sec.id])
                 # Sentiment is market-wide (Fear & Greed) for crypto.
                 sentiment_pairs = fng_pairs
+                # Real-time flow: latest taker buy/sell pressure + short momentum.
+                tk = deriv_repo.latest(db, security_id=sec.id, metric="taker_ratio")
+                flow = signal_engine.flow_score(
+                    df, float(tk.value) if tk else None, days=settings.flow_momentum_days
+                )
                 draft = signal_engine.build_signal(
                     security_id=sec.id,
                     sector=sec.sector,
@@ -473,6 +478,7 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
                     generated_at=now,
                     confidence=confidence,
                     momentum_score=mom_scores.get(sec.id, 0.0),
+                    flow=flow,
                 )
                 # One current signal per coin: expire the previous open one first.
                 signals_repo.supersede_open(db, security_id=sec.id)

@@ -354,6 +354,8 @@ export interface AppSettings {
   weight_macro: number
   weight_sentiment: number
   weight_momentum: number
+  weight_flow: number
+  flow_momentum_days: number
   buy_threshold: number
   sell_threshold: number
   default_horizon_days: number
@@ -436,6 +438,27 @@ export interface AuthSummary {
 export interface AccessLogResponse {
   summary: AuthSummary
   events: AuthEvent[]
+}
+
+export interface AuditFinding {
+  severity: 'critical' | 'warn' | 'good' | 'info'
+  title: string
+  detail: string
+  suggestion: string | null
+}
+
+export interface AuditMetrics {
+  total_return_pct: number | null
+  sharpe: number | null
+  psr: number | null
+  deflated_sharpe: number | null
+  btc_buyhold_pct: number | null
+  rebalances: number
+}
+
+export interface AuditResponse {
+  findings: AuditFinding[]
+  metrics: AuditMetrics | null
 }
 
 export interface Mover {
@@ -687,6 +710,7 @@ export const api = {
     request<AccessLogResponse>(`/api/security/access-log?limit=${limit}`),
 
   getMovers: () => request<MoversResponse>('/api/market/movers'),
+  auditStrategy: () => request<AuditResponse>('/api/strategy/audit'),
 
   getPositioning: () => request<PositioningListResponse>('/api/positioning'),
   getPositioningFor: (ticker: string) =>

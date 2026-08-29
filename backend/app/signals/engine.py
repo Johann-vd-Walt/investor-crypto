@@ -45,19 +45,38 @@ class SignalDraft:
     macro_score: Decimal
     sentiment_score: Decimal
     momentum_score: Decimal | None
+    flow_score: Decimal | None
     suggested_entry: Decimal | None
     suggested_stop: Decimal | None
     suggested_size: Decimal | None
     rationale: dict = field(default_factory=dict)
 
 
-def _normalised_weights(s: Settings) -> tuple[float, float, float, float]:
+def _normalised_weights(s: Settings) -> tuple[float, float, float, float, float]:
     wt, wm, ws = s.weight_technical, s.weight_macro, s.weight_sentiment
     wmom = getattr(s, "weight_momentum", 0.0)
-    total = wt + wm + ws + wmom
+    wflow = getattr(s, "weight_flow", 0.0)
+    total = wt + wm + ws + wmom + wflow
     if total <= 0:
-        return (0.25, 0.25, 0.25, 0.25)
-    return (wt / total, wm / total, ws / total, wmom / total)
+        return (0.25, 0.25, 0.25, 0.25, 0.0)
+    return (wt / total, wm / total, ws / total, wmom / total, wflow / total)
+
+
+def flow_score(price_df: pd.DataFrame, taker_ratio: float | None, *, days: int = 3) -> float:
+    """Real-time FLOW layer (-1..1): short-term price momentum + taker buy/sell
+    pressure. UNBACKTESTABLE — used live only; treat as short-horizon confirmation.
+    """
+    mom = 0.0
+    closes = price_df["close"] if "close" in price_df else None
+    if closes is not None and len(closes) > days:
+        past = float(closes.iloc[-days - 1])
+        cur = float(closes.iloc[-1])
+        if past > 0:
+            mom = clamp((cur / past - 1.0) * 10.0)  # ~10% move over `days` -> full
+    pressure = 0.0
+    if taker_ratio is not None:
+        pressure = clamp((float(taker_ratio) - 1.0) * 2.5)  # ratio 1.4 -> +1
+    return clamp(0.6 * mom + 0.4 * pressure)
 
 
 def _direction(score: float, s: Settings) -> SignalDirection:
@@ -120,6 +139,7 @@ def build_signal(
     confidence: Decimal | None = None,
     event_flag: bool = False,
     momentum_score: float = 0.0,
+    flow: float = 0.0,
 ) -> SignalDraft:
     tech = technical_score(price_df)
     sent = sentiment_score(sentiment_pairs, event_flag=event_flag)
@@ -127,13 +147,15 @@ def build_signal(
     tilt = macro_regime.sector_tilt(macro_layer, sector)
     macro_component = clamp(macro_layer.score + tilt)
     momentum_component = clamp(momentum_score)
+    flow_component = clamp(flow)
 
-    wt, wm, ws, wmom = _normalised_weights(settings)
+    wt, wm, ws, wmom, wflow = _normalised_weights(settings)
     fused = clamp(
         wt * tech.score
         + wm * macro_component
         + ws * sent.score
         + wmom * momentum_component
+        + wflow * flow_component
     )
     direction = _direction(fused, settings)
 
@@ -148,7 +170,7 @@ def build_signal(
         "fused_score": round(fused, 4),
         "weights": {
             "technical": round(wt, 4), "macro": round(wm, 4),
-            "sentiment": round(ws, 4), "momentum": round(wmom, 4),
+            "sentiment": round(ws, 4), "momentum": round(wmom, 4), "flow": round(wflow, 4),
         },
         "thresholds": {"buy": settings.buy_threshold, "sell": settings.sell_threshold},
         "technical": tech.as_rationale(),
@@ -157,6 +179,8 @@ def build_signal(
         "sentiment": sent.as_rationale(),
         "momentum": {"score": round(momentum_component, 4),
                      "detail": "cross-sectional relative strength percentile"},
+        "flow": {"score": round(flow_component, 4),
+                 "detail": "real-time short-term momentum + taker buy/sell pressure (unbacktestable)"},
         "sizing": {
             "account_size": str(settings.account_size),
             "risk_per_trade_pct": str(settings.risk_per_trade_pct),
@@ -175,6 +199,7 @@ def build_signal(
         macro_score=_dec(macro_component),
         sentiment_score=_dec(sent.score),
         momentum_score=_dec(momentum_component),
+        flow_score=_dec(flow_component),
         suggested_entry=_dec(float(entry)) if entry is not None else None,
         suggested_stop=_dec(float(stop)) if stop is not None else None,
         suggested_size=size,

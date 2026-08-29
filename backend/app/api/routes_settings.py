@@ -26,6 +26,8 @@ class SettingsResponse(BaseModel):
     weight_macro: float
     weight_sentiment: float
     weight_momentum: float
+    weight_flow: float
+    flow_momentum_days: int
     buy_threshold: float
     sell_threshold: float
     default_horizon_days: int
@@ -60,6 +62,8 @@ def _response(db: Session) -> SettingsResponse:
         weight_macro=eff.weight_macro,
         weight_sentiment=eff.weight_sentiment,
         weight_momentum=eff.weight_momentum,
+        weight_flow=eff.weight_flow,
+        flow_momentum_days=eff.flow_momentum_days,
         buy_threshold=eff.buy_threshold,
         sell_threshold=eff.sell_threshold,
         default_horizon_days=eff.default_horizon_days,
