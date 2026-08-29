@@ -397,8 +397,10 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
             fng_sent = max(-1.0, min(1.0, (float(fng.value) - 50.0) / 50.0))
             fng_pairs = [(fng_sent, 1.0)] * 5  # 5 -> full conviction (no volume damping)
 
-        # Measured hit rate -> confidence (None until Phase 6 has closed trades).
-        perf = performance.measured_performance(db)
+        # Confidence from the bot's REAL (Luno) track record once it has enough
+        # closed trades; else fall back to the legacy paper-trade record.
+        live_perf = performance.live_performance(db)
+        perf = live_perf if live_perf.win_rate is not None else performance.measured_performance(db)
         confidence = performance.confidence_from_performance(perf)
 
         # Targets: requested tickers, else watchlist, else anything with bars.

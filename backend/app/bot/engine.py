@@ -73,6 +73,21 @@ def fetch_live_prices(symbols: list[str], base_url: str) -> dict[str, Decimal]:
         return {}
 
 
+def live_price_map(app_tickers, *, live: bool, broker) -> dict[str, Decimal]:
+    """Prices keyed by APP ticker. In live mode they come from LUNO's own book
+    (so the bot decides and executes on the same venue); otherwise Binance."""
+    tickers = list(set(app_tickers))
+    if live and broker is not None:
+        lt = broker.tickers()  # {luno_pair: price}
+        out: dict[str, Decimal] = {}
+        for t in tickers:
+            pair = to_luno_pair(t)
+            if pair and pair in lt:
+                out[t] = lt[pair]
+        return out
+    return fetch_live_prices(tickers, get_settings().binance_base_url)
+
+
 # ------------------------------------------------------------------ broker -----
 def get_broker() -> LunoBroker | None:
     """Luno client from env keys, or None if live trading isn't configured."""
@@ -256,7 +271,7 @@ def tick(db: Session) -> dict:
     id_to_ticker = {
         s.id: s.ticker for s in db.scalars(select(Security).where(Security.id.in_(sec_ids))).all()
     } if sec_ids else {}
-    prices = fetch_live_prices(list(id_to_ticker.values()), get_settings().binance_base_url)
+    prices = live_price_map(id_to_ticker.values(), live=live, broker=broker)
 
     summary = {"closed": 0, "opened": 0, "skipped": 0, "mode": st.mode, "dry_run": bool(st.dry_run)}
 

@@ -27,6 +27,7 @@ export default function Bot() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['bot'], queryFn: api.getBot, refetchInterval: 10_000 })
   const luno = useQuery({ queryKey: ['luno'], queryFn: api.getLunoStatus, refetchInterval: 30_000, retry: false })
+  const perf = useQuery({ queryKey: ['bot-perf'], queryFn: api.getBotPerformance, refetchInterval: 30_000 })
   const [maxOrder, setMaxOrder] = useState('')
   const [dailyCap, setDailyCap] = useState('')
 
@@ -219,6 +220,32 @@ export default function Bot() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </>
+      )}
+
+      {/* Realised performance from the bot's own closed trades */}
+      {perf.data && (perf.data.paper.sample > 0 || perf.data.luno.sample > 0) && (
+        <>
+          <h2 className="section-title">Track record (closed trades)</h2>
+          <div className="bt-metrics-row">
+            {([['Paper', perf.data.paper], ['Live · Luno (real)', perf.data.luno]] as const).map(([label, v]) => (
+              <div key={label} className="bt-metrics">
+                <h3>{label}</h3>
+                {v.sample === 0 ? <p className="muted">No closed trades yet.</p> : (
+                  <table><tbody>
+                    <tr><td>Trades</td><td>{v.sample}</td></tr>
+                    <tr><td>Win rate</td><td>{v.win_rate != null ? `${(v.win_rate * 100).toFixed(0)}% (${v.wins}/${v.sample})` : `— (need ≥10; ${v.wins}/${v.sample})`}</td></tr>
+                    <tr><td>Avg return/trade</td><td style={{ color: pnlColor(v.avg_return_pct) }}>{v.avg_return_pct != null ? `${v.avg_return_pct.toFixed(2)}%` : '—'}</td></tr>
+                    <tr><td>Total P&amp;L</td><td style={{ color: pnlColor(v.total_pnl) }}>{usd(v.total_pnl)}</td></tr>
+                  </tbody></table>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: '0.85rem' }}>
+            Live win-rate feeds the signal <em>confidence</em> once there are ≥10 real closed trades — so
+            confidence reflects your actual Luno results, not simulation.
+          </p>
         </>
       )}
 

@@ -87,6 +87,21 @@ class LunoBroker:
         except (LunoError, KeyError):
             return None
 
+    def tickers(self) -> dict[str, Decimal]:
+        """All markets' last-trade prices in one call: {pair: price}."""
+        out: dict[str, Decimal] = {}
+        try:
+            for t in self._req("GET", "/api/1/tickers").get("tickers", []):
+                lt = t.get("last_trade")
+                if t.get("pair") and lt:
+                    try:
+                        out[t["pair"]] = Decimal(str(lt))
+                    except Exception:  # noqa: BLE001
+                        continue
+        except LunoError as exc:
+            logger.warning("luno tickers failed: %s", exc)
+        return out
+
     def fee_info(self, pair: str) -> dict:
         return self._req("GET", "/api/1/fee_info", params={"pair": pair})
 

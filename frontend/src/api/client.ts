@@ -511,6 +511,20 @@ export interface LunoStatus {
   balances: LunoBalance[]
 }
 
+export interface VenueStats {
+  venue: string
+  sample: number
+  wins: number
+  win_rate: number | null
+  avg_return_pct: number | null
+  total_pnl: number
+}
+
+export interface BotPerformance {
+  paper: VenueStats
+  luno: VenueStats
+}
+
 export interface BotEvent {
   created_at: string
   kind: string
@@ -664,6 +678,7 @@ export const api = {
   setBotCaps: (caps: { max_order_usd?: number; daily_cap_usd?: number }) =>
     request<BotResponse>('/api/bot/caps', { method: 'POST', body: JSON.stringify(caps) }),
   getLunoStatus: () => request<LunoStatus>('/api/bot/luno'),
+  getBotPerformance: () => request<BotPerformance>('/api/bot/performance'),
 
   // Dev-only manual job trigger (APP_ENV=development).
   runJob: (job_name: string, params: Record<string, unknown> = {}) =>

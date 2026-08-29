@@ -14,12 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.bot import engine
-from app.config import get_settings
+from app.bot import performance as bot_perf
 from app.db.models import BotEquity, BotEvent, BotPosition, Security
 from app.db.session import get_db
 from app.schemas.bot import (
-    BotEquityPoint, BotEventOut, BotPositionOut, BotResponse, BotStatusOut,
-    CapsUpdate, DryRunUpdate, LunoStatusOut, ModeUpdate,
+    BotEquityPoint, BotEventOut, BotPerformanceOut, BotPositionOut, BotResponse,
+    BotStatusOut, CapsUpdate, DryRunUpdate, LunoStatusOut, ModeUpdate, VenueStats,
 )
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
@@ -42,8 +42,10 @@ _NOTE_LIVE_REAL = (
 
 def _build_response(db: Session) -> BotResponse:
     st = engine.ensure_state(db)
+    live = st.mode == "live"
+    broker = engine.get_broker() if live else None
     luno_ok = engine.get_broker() is not None
-    venue = "luno" if st.mode == "live" else "paper"
+    venue = "luno" if live else "paper"
 
     open_pos = list(db.scalars(
         select(BotPosition).where(BotPosition.status == "OPEN", BotPosition.venue == venue)
@@ -54,7 +56,7 @@ def _build_response(db: Session) -> BotResponse:
         ).all()
     } if open_pos else {}
     tickers = [sec_by_id[p.security_id].ticker for p in open_pos if p.security_id in sec_by_id]
-    prices = engine.fetch_live_prices(tickers, get_settings().binance_base_url)
+    prices = engine.live_price_map(tickers, live=live, broker=broker)
 
     positions: list[BotPositionOut] = []
     equity = Decimal(st.cash)
@@ -144,3 +146,10 @@ def set_caps(payload: CapsUpdate, db: Session = Depends(get_db)) -> BotResponse:
 def luno_status() -> LunoStatusOut:
     """Read-only Luno connection + balances (no orders placed)."""
     return LunoStatusOut(**engine.luno_status())
+
+
+@router.get("/performance", response_model=BotPerformanceOut)
+def bot_performance(db: Session = Depends(get_db)) -> BotPerformanceOut:
+    """Realised win-rate / P&L from the bot's own closed trades (paper vs live)."""
+    s = bot_perf.all_stats(db)
+    return BotPerformanceOut(paper=VenueStats(**s["paper"]), luno=VenueStats(**s["luno"]))

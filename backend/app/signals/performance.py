@@ -73,6 +73,46 @@ def measured_performance(db: Session) -> Performance:
     )
 
 
+def live_performance(db: Session) -> Performance:
+    """Measured performance from the bot's REAL (Luno) closed positions.
+
+    Once there are enough of these, confidence reflects reality rather than
+    simulation. Returns win_rate=None until MIN_SAMPLE real trades exist.
+    """
+    from app.db.models import BotPosition
+
+    rows = db.execute(
+        select(BotPosition.pnl, BotPosition.cost_basis, BotPosition.exit_datetime)
+        .where(
+            BotPosition.status == "CLOSED",
+            BotPosition.venue == "luno",
+            BotPosition.pnl.is_not(None),
+        )
+        .order_by(BotPosition.exit_datetime)
+    ).all()
+    n = len(rows)
+    if n == 0:
+        return Performance(sample_size=0, wins=0, win_rate=None, avg_return_pct=None)
+    wins = 0
+    returns: list[float] = []
+    total = Decimal(0)
+    curve: list[EquityPoint] = []
+    for pnl, cost, exit_dt in rows:
+        if pnl and pnl > 0:
+            wins += 1
+        if cost:
+            returns.append(float(pnl) / float(cost) * 100.0)
+        total += pnl or Decimal(0)
+        if exit_dt is not None:
+            curve.append(EquityPoint(on_date=exit_dt.date(), cumulative_pnl=total))
+    win_rate = wins / n if n >= MIN_SAMPLE else None
+    return Performance(
+        sample_size=n, wins=wins, win_rate=win_rate,
+        avg_return_pct=(sum(returns) / len(returns)) if returns else None,
+        total_pnl=total, equity_curve=curve,
+    )
+
+
 def confidence_from_performance(perf: Performance) -> Decimal | None:
     """Map a measured win rate to a signal confidence (0..1). None if unknown."""
     if perf.win_rate is None:

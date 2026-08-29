@@ -88,3 +88,17 @@ class DryRunUpdate(BaseModel):
 class CapsUpdate(BaseModel):
     max_order_usd: DecimalAsFloat | None = None
     daily_cap_usd: DecimalAsFloat | None = None
+
+
+class VenueStats(BaseModel):
+    venue: str
+    sample: int
+    wins: int
+    win_rate: float | None
+    avg_return_pct: float | None
+    total_pnl: float
+
+
+class BotPerformanceOut(BaseModel):
+    paper: VenueStats
+    luno: VenueStats
