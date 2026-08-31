@@ -41,5 +41,11 @@ def to_luno_pair(ticker: str) -> str | None:
     return f"{luno_base}USDT" if luno_base else None
 
 
+def to_luno_base(ticker: str) -> str | None:
+    """App ticker (e.g. 'BTCUSDT') -> Luno base asset (e.g. 'XBT'), or None if
+    the coin isn't tradeable on Luno. Use this to read the real coin balance."""
+    return _LUNO_BASE.get(app_base(ticker))
+
+
 def is_tradeable(ticker: str) -> bool:
     return to_luno_pair(ticker) is not None

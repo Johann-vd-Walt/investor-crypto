@@ -26,14 +26,14 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.brokers.luno import LunoBroker, LunoError
-from app.brokers.mapping import to_luno_pair
+from app.brokers.mapping import to_luno_base, to_luno_pair
 from app.config import get_settings
 from app.db.models import (
     BotEquity, BotEvent, BotPosition, BotState, Security, Signal,
@@ -49,6 +49,9 @@ _EVENT_RETENTION_DAYS = 30
 _SIGNAL_MAX_AGE_DAYS = 2
 _MIN_POSITION_USD = Decimal("10")  # skip dust-sized positions
 _QUOTE = "USDT"
+# Fraction of USDT cash never deployed on a live BUY, kept as a fee/dust reserve
+# so the round-trip (buy + eventual sell) fees are always covered.
+_LIVE_CASH_RESERVE = Decimal("0.02")  # 2%
 
 
 # --------------------------------------------------------------- live prices ---
@@ -97,8 +100,26 @@ def get_broker() -> LunoBroker | None:
     return LunoBroker(s.luno_api_key_id, s.luno_api_key_secret)
 
 
-def _reconcile(broker: LunoBroker, order_id: str, *, tries: int = 6) -> tuple[Decimal, Decimal, Decimal, str]:
-    """Poll a just-placed order until filled. Returns (base, counter, fee_counter, status)."""
+def _floor_volume(qty: Decimal, rule: dict | None) -> Decimal:
+    """Round a coin volume DOWN to the market's allowed precision (volume_scale).
+    Selling must never exceed the held balance, so we always floor, never round up."""
+    scale = 8
+    try:
+        scale = int((rule or {}).get("volume_scale", 8))
+    except (TypeError, ValueError):
+        scale = 8
+    step = Decimal(1).scaleb(-scale)  # e.g. scale=6 -> 0.000001
+    return qty.quantize(step, rounding=ROUND_DOWN) if step > 0 else qty
+
+
+def _reconcile(broker: LunoBroker, order_id: str, *, tries: int = 6) -> tuple[Decimal, Decimal, Decimal, Decimal, str]:
+    """Poll a just-placed order until filled.
+
+    Returns (base, counter, fee_counter, fee_base, status). Luno charges a market
+    BUY's fee in the *base* currency (fee_base) — so the coins actually credited
+    are ``base - fee_base``, not ``base``. A SELL's fee is in the counter
+    currency (fee_counter). We read both so holdings are never overstated.
+    """
     last: dict = {}
     for _ in range(tries):
         try:
@@ -111,8 +132,9 @@ def _reconcile(broker: LunoBroker, order_id: str, *, tries: int = 6) -> tuple[De
         time.sleep(1.0)
     base = Decimal(str(last.get("base", "0") or "0"))
     counter = Decimal(str(last.get("counter", "0") or "0"))
-    fee = Decimal(str(last.get("fee_counter", "0") or "0"))
-    return base, counter, fee, str(last.get("status") or last.get("state") or "?")
+    fee_counter = Decimal(str(last.get("fee_counter", "0") or "0"))
+    fee_base = Decimal(str(last.get("fee_base", "0") or "0"))
+    return base, counter, fee_counter, fee_base, str(last.get("status") or last.get("state") or "?")
 
 
 # ------------------------------------------------------------------- state -----
@@ -299,15 +321,30 @@ def tick(db: Session) -> dict:
 
         if live and not st.dry_run:
             pair = to_luno_pair(tk)
+            # Never ask Luno to sell more coin than the wallet actually holds.
+            # Fees, dust and rounding mean the recorded quantity can slightly
+            # exceed the real balance, which Luno rejects as "insufficient
+            # funds". Cap to the available balance, floored to Luno precision.
+            base_asset = to_luno_base(tk)
+            try:
+                avail_base = broker.available(base_asset) if base_asset else p.quantity
+            except Exception as exc:  # noqa: BLE001
+                _log(db, "error", f"Could not read {tk} balance: {exc}", ticker=tk)
+                survivors.append(p); held.add(p.security_id); continue
+            sell_qty = _floor_volume(min(p.quantity, avail_base), broker.rule(pair))
+            if sell_qty <= 0:
+                _log(db, "error", f"LIVE sell skipped for {tk}: no sellable balance (held {avail_base:.8f})", ticker=tk)
+                survivors.append(p); held.add(p.security_id); continue
             try:
                 coid = f"trader-x-{p.id}-{int(now.timestamp())}"
-                oid = broker.market_sell(pair, p.quantity, coid)
-                base, counter, fee, status = _reconcile(broker, oid)
+                oid = broker.market_sell(pair, sell_qty, coid)
+                base, counter, fee, fee_base, status = _reconcile(broker, oid)
                 proceeds = counter - fee
                 pnl = proceeds - p.cost_basis
                 p.exit_price = (counter / base) if base > 0 else px
+                p.quantity = sell_qty
                 p.luno_order_id = oid
-                _log(db, "close", f"LIVE {reason} SELL {p.quantity:.6f} {pair} -> ${proceeds:.2f} (fee ${fee:.2f}), P&L ${pnl:.2f} [{status}]", ticker=tk)
+                _log(db, "close", f"LIVE {reason} SELL {sell_qty:.6f} {pair} -> ${proceeds:.2f} (fee ${fee:.2f}), P&L ${pnl:.2f} [{status}]", ticker=tk)
             except LunoError as exc:
                 _log(db, "error", f"LIVE sell failed for {tk}: {exc}", ticker=tk)
                 survivors.append(p); held.add(p.security_id); continue
@@ -352,8 +389,11 @@ def tick(db: Session) -> dict:
             pair = to_luno_pair(tk)
             if pair is None:
                 continue  # coin not tradeable on Luno — silently skip
+            base_ccy = to_luno_base(tk) or ""
             daily_left = st.daily_cap_usd - st.daily_spent_usd
-            spend = min(st.max_order_usd, daily_left, st.cash * Decimal("0.99"))
+            # Never deploy 100% of cash: keep a USDT reserve so the round-trip
+            # fees are always covered and the account is never left stranded.
+            spend = min(st.max_order_usd, daily_left, st.cash * (Decimal(1) - _LIVE_CASH_RESERVE))
             if spend < _MIN_POSITION_USD:
                 summary["skipped"] += 1
                 continue
@@ -370,14 +410,17 @@ def tick(db: Session) -> dict:
             else:
                 try:
                     oid = broker.market_buy(pair, spend, coid)
-                    base, counter, fee, status = _reconcile(broker, oid)
+                    base, counter, fee, fee_base, status = _reconcile(broker, oid)
                     if base <= 0:
                         _log(db, "error", f"LIVE buy for {tk} not filled [{status}] — skipping.", ticker=tk)
                         continue
-                    qty = base
+                    # Luno takes the buy fee in the coin itself, so the wallet is
+                    # credited base - fee_base. Record the net so a later sell
+                    # never exceeds what we actually hold.
+                    qty = base - fee_base
                     cost = counter + fee
-                    px = cost / qty  # effective fill price
-                    _log(db, "open", f"LIVE BUY {qty:.6f} {pair} for ${cost:.2f} (fee ${fee:.2f}) [{status}]", ticker=tk)
+                    px = (cost / qty) if qty > 0 else px  # effective fill price
+                    _log(db, "open", f"LIVE BUY {qty:.6f} {pair} for ${cost:.2f} (fee ${fee:.2f} +{fee_base:.8f} {base_ccy}) [{status}]", ticker=tk)
                 except LunoError as exc:
                     _log(db, "error", f"LIVE buy failed for {tk}: {exc}", ticker=tk)
                     continue
