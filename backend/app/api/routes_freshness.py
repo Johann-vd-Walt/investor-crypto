@@ -41,14 +41,14 @@ class FreshnessResponse(BaseModel):
 def _is_stale(name: str, last_ingest: datetime | None, now: datetime) -> bool:
     if last_ingest is None:
         return True  # nothing ingested yet
-    # DB timestamps are naive (server local); compare naively against now.
+    # DB timestamps are naive UTC; compare naively against now (also UTC).
     threshold = timedelta(hours=_STALE_HOURS.get(name, 48))
     return (now - last_ingest) > threshold
 
 
 @router.get("", response_model=FreshnessResponse)
 def freshness(db: Session = Depends(get_db)) -> FreshnessResponse:
-    now = datetime.now()
+    now = datetime.utcnow()
     families = freshness_repo.get_freshness(db)
     out: list[FamilyOut] = []
     overall = False

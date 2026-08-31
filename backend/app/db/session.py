@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -35,6 +35,21 @@ engine = create_engine(
 SessionLocal = sessionmaker(
     bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
 )
+
+
+# Store and read every timestamp in UTC. MySQL TIMESTAMP / CURRENT_TIMESTAMP
+# columns are converted to the connection's ``time_zone`` on read; left at the
+# server default (SYSTEM = SAST here) they come back 2h ahead of the app's own
+# ``datetime.utcnow()`` values, so the two clocks disagree. Pinning the session
+# to UTC makes every timestamp the app sees UTC-naive and consistent; the
+# frontend then renders them in SAST. (TIMESTAMP columns are stored as UTC
+# internally, so this is a safe reinterpretation of existing rows.)
+if engine.dialect.name == "mysql":
+
+    @event.listens_for(engine, "connect")
+    def _set_session_utc(dbapi_conn, _record) -> None:  # noqa: ANN001
+        with dbapi_conn.cursor() as cur:
+            cur.execute("SET time_zone = '+00:00'")
 
 
 def get_db() -> Iterator[Session]:

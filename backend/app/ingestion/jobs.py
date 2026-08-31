@@ -456,7 +456,7 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
             if s and s.sector:
                 sector_counts[s.sector] += 1
 
-        now = datetime.now()
+        now = datetime.utcnow()  # UTC, consistent with all other stored times
         since = now - timedelta(days=14)
         for sec in liquid:
             try:
