@@ -331,9 +331,16 @@ def tick(db: Session) -> dict:
             except Exception as exc:  # noqa: BLE001
                 _log(db, "error", f"Could not read {tk} balance: {exc}", ticker=tk)
                 survivors.append(p); held.add(p.security_id); continue
-            sell_qty = _floor_volume(min(p.quantity, avail_base), broker.rule(pair))
-            if sell_qty <= 0:
-                _log(db, "error", f"LIVE sell skipped for {tk}: no sellable balance (held {avail_base:.8f})", ticker=tk)
+            rule = broker.rule(pair) or {}
+            min_vol = Decimal(str(rule.get("min_volume", "0") or "0"))
+            sell_qty = _floor_volume(min(p.quantity, avail_base), rule)
+            # If the wallet doesn't actually hold a sellable amount, calling Luno
+            # is guaranteed to fail — log the real numbers instead of hammering it.
+            if sell_qty <= 0 or (min_vol > 0 and sell_qty < min_vol):
+                _log(db, "error",
+                     f"LIVE sell blocked for {tk}: sellable {sell_qty:.8f} {base_asset} "
+                     f"(recorded {p.quantity:.8f}, wallet holds {avail_base:.8f}, "
+                     f"Luno min {min_vol:.8f}) — not sending order", ticker=tk)
                 survivors.append(p); held.add(p.security_id); continue
             try:
                 coid = f"trader-x-{p.id}-{int(now.timestamp())}"
@@ -346,7 +353,9 @@ def tick(db: Session) -> dict:
                 p.luno_order_id = oid
                 _log(db, "close", f"LIVE {reason} SELL {sell_qty:.6f} {pair} -> ${proceeds:.2f} (fee ${fee:.2f}), P&L ${pnl:.2f} [{status}]", ticker=tk)
             except LunoError as exc:
-                _log(db, "error", f"LIVE sell failed for {tk}: {exc}", ticker=tk)
+                _log(db, "error",
+                     f"LIVE sell failed for {tk}: tried {sell_qty:.8f} {base_asset} "
+                     f"(wallet holds {avail_base:.8f}) — {exc}", ticker=tk)
                 survivors.append(p); held.add(p.security_id); continue
         else:
             proceeds = px * p.quantity * gross_out
