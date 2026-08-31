@@ -112,6 +112,22 @@ def _floor_volume(qty: Decimal, rule: dict | None) -> Decimal:
     return qty.quantize(step, rounding=ROUND_DOWN) if step > 0 else qty
 
 
+# Fallback taker fee if Luno's fee_info can't be read. Luno's USDT-pair taker
+# fees sit well under this, so it's a safe over-estimate for the sell haircut.
+_FALLBACK_TAKER_FEE = Decimal("0.01")  # 1%
+
+
+def _taker_fee(broker: LunoBroker, pair: str) -> Decimal:
+    """The pair's taker fee as a fraction (e.g. 0.001). Conservative on failure."""
+    try:
+        tf = Decimal(str(broker.fee_info(pair).get("taker_fee", "0") or "0"))
+        if tf > 0:
+            return tf
+    except Exception:  # noqa: BLE001
+        pass
+    return _FALLBACK_TAKER_FEE
+
+
 def _reconcile(broker: LunoBroker, order_id: str, *, tries: int = 6) -> tuple[Decimal, Decimal, Decimal, Decimal, str]:
     """Poll a just-placed order until filled.
 
@@ -333,7 +349,12 @@ def tick(db: Session) -> dict:
                 survivors.append(p); held.add(p.security_id); continue
             rule = broker.rule(pair) or {}
             min_vol = Decimal(str(rule.get("min_volume", "0") or "0"))
-            sell_qty = _floor_volume(min(p.quantity, avail_base), rule)
+            # Luno takes the market-SELL fee on the base (coin) side, so it needs
+            # base_volume + fee available. Sell the balance MINUS the fee, never
+            # right up against it, or the fee tips it into insufficient funds.
+            taker = _taker_fee(broker, pair)
+            sellable = min(p.quantity, avail_base / (Decimal(1) + taker))
+            sell_qty = _floor_volume(sellable, rule)
             # If the wallet doesn't actually hold a sellable amount, calling Luno
             # is guaranteed to fail — log the real numbers instead of hammering it.
             if sell_qty <= 0 or (min_vol > 0 and sell_qty < min_vol):
