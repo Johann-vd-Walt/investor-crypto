@@ -355,14 +355,23 @@ def tick(db: Session) -> dict:
             taker = _taker_fee(broker, pair)
             sellable = min(p.quantity, avail_base / (Decimal(1) + taker))
             sell_qty = _floor_volume(sellable, rule)
-            # If the wallet doesn't actually hold a sellable amount, calling Luno
-            # is guaranteed to fail — log the real numbers instead of hammering it.
+            # If the wallet doesn't actually hold a sellable amount, the coins
+            # were sold/withdrawn outside the bot, never really filled, or are
+            # now sub-minimum dust — we can't exit on the market. Reconcile the
+            # books to reality: close it ONCE with no P&L (it's not a real sale,
+            # so it must never pollute the track record) and stop retrying every
+            # tick. Equity then stops counting coins that aren't there.
             if sell_qty <= 0 or (min_vol > 0 and sell_qty < min_vol):
-                _log(db, "error",
-                     f"LIVE sell blocked for {tk}: sellable {sell_qty:.8f} {base_asset} "
-                     f"(recorded {p.quantity:.8f}, wallet holds {avail_base:.8f}, "
-                     f"Luno min {min_vol:.8f}) — not sending order", ticker=tk)
-                survivors.append(p); held.add(p.security_id); continue
+                _log(db, "close",
+                     f"Reconciled {tk}: wallet holds {avail_base:.8f} {base_asset} "
+                     f"(books had {p.quantity:.8f}, Luno min {min_vol:.8f}) — coins not "
+                     f"in account, closing position in books (no market sale, P&L not counted).",
+                     ticker=tk)
+                p.status, p.exit_datetime, p.exit_price, p.exit_reason, p.pnl = (
+                    "CLOSED", now, px, "reconciled", None
+                )
+                summary["closed"] += 1
+                continue
             try:
                 coid = f"trader-x-{p.id}-{int(now.timestamp())}"
                 oid = broker.market_sell(pair, sell_qty, coid)
