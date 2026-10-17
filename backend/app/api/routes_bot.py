@@ -72,7 +72,7 @@ def _build_response(db: Session) -> BotResponse:
         positions.append(BotPositionOut(
             ticker=sec.ticker, name=sec.name, entry_datetime=p.entry_datetime,
             entry_price=p.entry_price, quantity=p.quantity, stop_price=p.stop_price,
-            live_price=live, cost_basis=p.cost_basis, venue=p.venue, market_value=mv,
+            live_price=live, cost_basis=p.cost_basis, venue=p.venue, kind=p.kind, market_value=mv,
             unrealized_pnl=upnl, unrealized_pct=upct,
         ))
 

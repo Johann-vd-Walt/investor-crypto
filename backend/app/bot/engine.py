@@ -16,6 +16,11 @@ Safety is layered so real orders can't happen by accident: keys live only in the
 environment, dry_run defaults on, caps are enforced before every order, and the
 kill switch is simply flipping mode back to 'paper' (or stopping the bot).
 
+Optional ACCUMULATION sleeve (settings dca_*): independent of signals, buys a
+fixed amount of one coin on a schedule while it trades a set % below its 1-year
+high. Those positions (kind='dca') are never auto-sold. Same caps, dry-run and
+venue rules as signal trades.
+
 Honest note: the backtests show no established edge (Deflated Sharpe ~22%) and
 buy-and-hold beat the strategy, so live trading is expected to lose money.
 """
@@ -29,14 +34,14 @@ from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
 import httpx
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.brokers.luno import LunoBroker, LunoError
 from app.brokers.mapping import to_luno_base, to_luno_pair
 from app.config import get_settings
 from app.db.models import (
-    BotEquity, BotEvent, BotPosition, BotState, Security, Signal,
+    BotEquity, BotEvent, BotPosition, BotState, PriceBar, Security, Signal,
     SignalDirection, SignalStatus,
 )
 from app.db.session import SessionLocal
@@ -52,6 +57,7 @@ _QUOTE = "USDT"
 # Fraction of USDT cash never deployed on a live BUY, kept as a fee/dust reserve
 # so the round-trip (buy + eventual sell) fees are always covered.
 _LIVE_CASH_RESERVE = Decimal("0.02")  # 2%
+_DCA_HOLD_DAYS = 9999  # accumulation positions have no horizon exit
 
 
 # --------------------------------------------------------------- live prices ---
@@ -151,6 +157,31 @@ def _reconcile(broker: LunoBroker, order_id: str, *, tries: int = 6) -> tuple[De
     fee_counter = Decimal(str(last.get("fee_counter", "0") or "0"))
     fee_base = Decimal(str(last.get("fee_base", "0") or "0"))
     return base, counter, fee_counter, fee_base, str(last.get("status") or last.get("state") or "?")
+
+
+def _live_market_buy(db: Session, broker: LunoBroker, *, tk: str, pair: str, spend: Decimal,
+                     coid: str, px: Decimal, label: str) -> tuple[Decimal, Decimal, Decimal] | None:
+    """Place a REAL market BUY on Luno and reconcile it.
+
+    Returns (qty_net, cost, effective_price) or None (logged) if it failed.
+    Luno takes the buy fee in the coin itself, so the wallet is credited
+    base - fee_base; we record the net so a later sell never exceeds it."""
+    base_ccy = to_luno_base(tk) or ""
+    try:
+        oid = broker.market_buy(pair, spend, coid)
+        base, counter, fee, fee_base, status = _reconcile(broker, oid)
+    except LunoError as exc:
+        _log(db, "error", f"LIVE {label} buy failed for {tk}: {exc}", ticker=tk)
+        return None
+    if base <= 0:
+        _log(db, "error", f"LIVE {label} buy for {tk} not filled [{status}] — skipping.", ticker=tk)
+        return None
+    qty = base - fee_base
+    cost = counter + fee
+    eff = (cost / qty) if qty > 0 else px
+    _log(db, "open", f"LIVE {label} BUY {qty:.6f} {pair} for ${cost:.2f} (fee ${fee:.2f} "
+                     f"+{fee_base:.8f} {base_ccy}) [{status}]", ticker=tk)
+    return qty, cost, eff
 
 
 # ------------------------------------------------------------------- state -----
@@ -292,9 +323,12 @@ def tick(db: Session) -> dict:
         st.daily_spent_usd = Decimal(0)
         st.daily_spent_date = today
 
-    open_pos = list(db.scalars(
+    all_open = list(db.scalars(
         select(BotPosition).where(BotPosition.status == "OPEN", BotPosition.venue == venue)
     ).all())
+    # Accumulation holdings are never exited and don't count toward signal caps.
+    dca_pos = [p for p in all_open if p.kind == "dca"]
+    open_pos = [p for p in all_open if p.kind != "dca"]
     acted = {sid for sid in db.scalars(
         select(BotPosition.signal_id).where(BotPosition.signal_id.is_not(None), BotPosition.venue == venue)
     ).all()}
@@ -307,7 +341,12 @@ def tick(db: Session) -> dict:
         ).order_by(Signal.generated_at.desc())
     ).all())
 
-    sec_ids = {p.security_id for p in open_pos} | {s.security_id for s in sigs}
+    dca_sec = None
+    if settings.dca_enabled:
+        dca_sec = db.scalar(select(Security).where(Security.ticker == settings.dca_ticker))
+    sec_ids = {p.security_id for p in all_open} | {s.security_id for s in sigs}
+    if dca_sec is not None:
+        sec_ids.add(dca_sec.id)
     id_to_ticker = {
         s.id: s.ticker for s in db.scalars(select(Security).where(Security.id.in_(sec_ids))).all()
     } if sec_ids else {}
@@ -347,6 +386,9 @@ def tick(db: Session) -> dict:
             except Exception as exc:  # noqa: BLE001
                 _log(db, "error", f"Could not read {tk} balance: {exc}", ticker=tk)
                 survivors.append(p); held.add(p.security_id); continue
+            # Coins held by the accumulation sleeve are off-limits to signal exits.
+            dca_held = sum((d.quantity for d in dca_pos if d.security_id == p.security_id), Decimal(0))
+            avail_base = max(Decimal(0), avail_base - dca_held)
             rule = broker.rule(pair) or {}
             min_vol = Decimal(str(rule.get("min_volume", "0") or "0"))
             # Luno takes the market-SELL fee on the base (coin) side, so it needs
@@ -408,9 +450,9 @@ def tick(db: Session) -> dict:
             _log(db, "error", f"Could not read Luno balance: {exc}")
             usdt_avail = Decimal(0)
         st.cash = usdt_avail  # display: real USDT
-        equity_est = usdt_avail + sum((mark(p) for p in survivors), Decimal(0))
+        equity_est = usdt_avail + sum((mark(p) for p in survivors + dca_pos), Decimal(0))
     else:
-        equity_est = st.cash + sum((mark(p) for p in survivors), Decimal(0))
+        equity_est = st.cash + sum((mark(p) for p in survivors + dca_pos), Decimal(0))
 
     max_open = max(1, settings.max_open_positions)
     n_open = len(held)
@@ -428,7 +470,6 @@ def tick(db: Session) -> dict:
             pair = to_luno_pair(tk)
             if pair is None:
                 continue  # coin not tradeable on Luno — silently skip
-            base_ccy = to_luno_base(tk) or ""
             daily_left = st.daily_cap_usd - st.daily_spent_usd
             # Never deploy 100% of cash: keep a USDT reserve so the round-trip
             # fees are always covered and the account is never left stranded.
@@ -447,22 +488,11 @@ def tick(db: Session) -> dict:
                 cost = spend
                 _log(db, "open", f"DRY-RUN LIVE BUY ${spend:.2f} of {pair} (~{qty:.6f} @ {px:.4f})", ticker=tk)
             else:
-                try:
-                    oid = broker.market_buy(pair, spend, coid)
-                    base, counter, fee, fee_base, status = _reconcile(broker, oid)
-                    if base <= 0:
-                        _log(db, "error", f"LIVE buy for {tk} not filled [{status}] — skipping.", ticker=tk)
-                        continue
-                    # Luno takes the buy fee in the coin itself, so the wallet is
-                    # credited base - fee_base. Record the net so a later sell
-                    # never exceeds what we actually hold.
-                    qty = base - fee_base
-                    cost = counter + fee
-                    px = (cost / qty) if qty > 0 else px  # effective fill price
-                    _log(db, "open", f"LIVE BUY {qty:.6f} {pair} for ${cost:.2f} (fee ${fee:.2f} +{fee_base:.8f} {base_ccy}) [{status}]", ticker=tk)
-                except LunoError as exc:
-                    _log(db, "error", f"LIVE buy failed for {tk}: {exc}", ticker=tk)
+                filled = _live_market_buy(db, broker, tk=tk, pair=pair, spend=spend,
+                                          coid=coid, px=px, label="signal")
+                if filled is None:
                     continue
+                qty, cost, px = filled
             db.add(BotPosition(
                 security_id=s.security_id, signal_id=s.id, entry_datetime=now,
                 entry_price=px, quantity=qty, stop_price=s.suggested_stop,
@@ -492,6 +522,13 @@ def tick(db: Session) -> dict:
         held.add(s.security_id); acted.add(s.id); n_open += 1
         summary["opened"] += 1
 
+    # 2b. Accumulation (recurring buy) — independent of signals and their caps.
+    if dca_sec is not None:
+        summary["dca"] = _dca_step(db, st, settings, broker, sec=dca_sec, venue=venue, live=live,
+                                   now=now, px=prices.get(dca_sec.ticker), gross_in=gross_in)
+    elif settings.dca_enabled and now.minute == 0:
+        _log(db, "error", f"Accumulation: unknown coin {settings.dca_ticker!r} — nothing bought.")
+
     # 3. Mark-to-market equity.
     db.flush()
     equity = st.cash
@@ -513,6 +550,99 @@ def tick(db: Session) -> dict:
     db.commit()
     summary["equity"] = float(equity)
     return summary
+
+
+def _dca_step(db: Session, st: BotState, settings, broker, *, sec: Security, venue: str,
+              live: bool, now: datetime, px: Decimal | None, gross_in: Decimal) -> str:
+    """One accumulation check. Returns a short status for the tick summary.
+
+    Buys ``dca_amount_usd`` of ``sec`` when the last accumulation buy on this
+    venue is at least ``dca_interval_days`` old AND price is at least
+    ``dca_min_drawdown_pct`` below its 365-day high (0 = no drawdown gate).
+    Skips are logged at most hourly so the event log isn't flooded."""
+    tk = sec.ticker
+    hourly = now.minute == 0
+    last = db.scalar(
+        select(BotPosition.entry_datetime)
+        .where(BotPosition.kind == "dca", BotPosition.venue == venue)
+        .order_by(BotPosition.entry_datetime.desc()).limit(1)
+    )
+    if last is not None and now - last < timedelta(days=max(1, settings.dca_interval_days)):
+        return "not_due"
+    if px is None or px <= 0:
+        return "no_price"
+
+    # Drawdown gate vs the 365-day high (daily bars + today's live price).
+    min_dd = Decimal(settings.dca_min_drawdown_pct)
+    if min_dd > 0:
+        since = now - timedelta(days=365)
+        high = db.scalar(
+            select(func.max(PriceBar.high))
+            .where(PriceBar.security_id == sec.id, PriceBar.bar_datetime >= since)
+        )
+        if high is None:
+            if hourly:
+                _log(db, "info", f"Accumulation skipped: no price history for {tk} to measure the drawdown.", ticker=tk)
+            return "no_history"
+        high = max(Decimal(high), px)
+        dd_pct = (Decimal(1) - px / high) * 100
+        if dd_pct < min_dd:
+            if hourly:
+                _log(db, "info", f"Accumulation waiting: {tk} is {dd_pct:.1f}% below its 1-year high "
+                                 f"(needs at least {min_dd}%).", ticker=tk)
+            return "above_gate"
+
+    amount = Decimal(settings.dca_amount_usd)
+    if live:
+        pair = to_luno_pair(tk)
+        if pair is None:
+            if hourly:
+                _log(db, "error", f"Accumulation: {tk} is not tradeable on Luno in USDT.", ticker=tk)
+            return "not_on_luno"
+        daily_left = st.daily_cap_usd - st.daily_spent_usd
+        spend = min(amount, st.max_order_usd, daily_left, st.cash * (Decimal(1) - _LIVE_CASH_RESERVE))
+        if spend < _MIN_POSITION_USD:
+            if hourly:
+                _log(db, "info", f"Accumulation skipped: ${spend:.2f} available under caps/cash "
+                                 f"(min ${_MIN_POSITION_USD}).", ticker=tk)
+            return "caps"
+        rule = broker.rule(pair) or {}
+        min_vol = Decimal(str(rule.get("min_volume", "0") or "0"))
+        if min_vol > 0 and (spend / px) < min_vol:
+            if hourly:
+                _log(db, "info", f"Accumulation skipped: ${spend:.2f} is below Luno's minimum for {pair}.", ticker=tk)
+            return "min_volume"
+        coid = f"trader-dca-{int(now.timestamp())}"
+        if st.dry_run:
+            qty = (spend / px).quantize(Decimal("0.00000001"))
+            cost, entry = spend, px
+            _log(db, "open", f"DRY-RUN LIVE accumulation BUY ${spend:.2f} of {pair} (~{qty:.6f} @ {px:.4f})", ticker=tk)
+        else:
+            filled = _live_market_buy(db, broker, tk=tk, pair=pair, spend=spend, coid=coid, px=px,
+                                      label="accumulation")
+            if filled is None:
+                return "failed"
+            qty, cost, entry = filled
+        st.daily_spent_usd += spend
+        st.cash -= cost  # display only; the next tick re-reads the real USDT
+    else:
+        spend = min(amount, st.cash * Decimal("0.99"))
+        if spend < _MIN_POSITION_USD:
+            if hourly:
+                _log(db, "info", f"Accumulation skipped: only ${st.cash:.2f} paper cash left.", ticker=tk)
+            return "cash"
+        qty = (spend / (px * gross_in)).quantize(Decimal("0.00000001"))
+        cost, entry = px * qty * gross_in, px
+        st.cash -= cost
+        _log(db, "open", f"Accumulation BUY {qty:.6f} @ {px:.4f} (${cost:.2f})", ticker=tk)
+
+    db.add(BotPosition(
+        security_id=sec.id, signal_id=None, entry_datetime=now, entry_price=entry,
+        quantity=qty, stop_price=None, horizon_days=_DCA_HOLD_DAYS, cost_basis=cost,
+        status="OPEN", venue=venue, kind="dca",
+        luno_order_id=(coid if live and not st.dry_run else None),
+    ))
+    return "bought"
 
 
 def safe_tick() -> None:

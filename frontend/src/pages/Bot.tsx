@@ -258,12 +258,17 @@ export default function Bot() {
           <thead><tr><th>Coin</th><th>Qty</th><th>Entry</th><th>Live</th><th>Stop</th><th>Value</th><th>Unrealised</th></tr></thead>
           <tbody>
             {q.data?.positions.map((p) => (
-              <tr key={p.ticker}>
-                <td><strong>{p.ticker}</strong></td>
+              <tr key={`${p.ticker}-${p.kind}-${p.entry_datetime}`}>
+                <td>
+                  <strong>{p.ticker}</strong>
+                  {p.kind === 'dca' && (
+                    <span className="muted" title="Accumulation buy — held, never auto-sold by the bot" style={{ marginLeft: '0.4rem', fontSize: '0.75em' }}>ACCUM</span>
+                  )}
+                </td>
                 <td>{p.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
                 <td>{usd(p.entry_price)}</td>
                 <td>{usd(p.live_price)}</td>
-                <td>{p.stop_price ? usd(p.stop_price) : '—'}</td>
+                <td>{p.kind === 'dca' ? 'held' : p.stop_price ? usd(p.stop_price) : '—'}</td>
                 <td>{usd(p.market_value, 0)}</td>
                 <td style={{ color: pnlColor(p.unrealized_pnl) }}>{usd(p.unrealized_pnl)} ({signed(p.unrealized_pct)}%)</td>
               </tr>

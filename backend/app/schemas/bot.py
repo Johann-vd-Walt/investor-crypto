@@ -19,6 +19,7 @@ class BotPositionOut(BaseModel):
     live_price: DecimalAsFloat | None
     cost_basis: DecimalAsFloat
     venue: str
+    kind: str = "signal"          # 'signal' | 'dca' (accumulation, never auto-sold)
     market_value: DecimalAsFloat | None
     unrealized_pnl: DecimalAsFloat | None
     unrealized_pct: DecimalAsFloat | None

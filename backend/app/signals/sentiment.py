@@ -62,3 +62,22 @@ def sentiment_score(
             "event_flag": event_flag,
         },
     )
+
+
+def fear_greed_sentiment(value: float, *, mode: str = "trend", band: int = 25) -> float:
+    """Map the Fear & Greed index (0..100) to a market-wide sentiment in [-1, 1].
+
+    - ``trend``     : greed positive, fear negative — (value - 50) / 50.
+    - ``contrarian``: extreme fear (<= band) is buy-side, extreme greed
+      (>= 100 - band) is sell-side, scaled to full strength at 0 / 100; the
+      middle of the range is neutral.
+    """
+    v = float(value)
+    if mode != "contrarian":
+        return clamp((v - 50.0) / 50.0)
+    band = max(1, min(49, int(band)))
+    if v <= band:
+        return clamp((band - v) / band)
+    if v >= 100 - band:
+        return clamp(-(v - (100 - band)) / band)
+    return 0.0

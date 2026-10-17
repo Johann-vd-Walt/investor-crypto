@@ -23,6 +23,11 @@ _W_RSI = 0.25
 _W_MACD = 0.20
 _W_BREAKOUT = 0.25
 
+# Pullback entry (opt-in): buy weakness inside a long-term uptrend.
+_W_NEAR_SMA50 = 0.10
+_NEAR_SMA50_BAND = 0.03   # within ±3% of the SMA50 counts as a retest
+_PULLBACK_LONG_SMA = 200
+
 _BREAKOUT_LOOKBACK = 20
 _BREAKOUT_VOL_MULT = 1.5
 
@@ -35,8 +40,15 @@ def _valid(x) -> bool:
     return x is not None and not (isinstance(x, float) and math.isnan(x))
 
 
-def technical_score(df: pd.DataFrame) -> LayerScore:
-    """Score the latest bar of ``df`` (OHLCV, ascending by date)."""
+def technical_score(
+    df: pd.DataFrame, *, pullback_rsi: float | None = None, long_sma_days: int = _PULLBACK_LONG_SMA
+) -> LayerScore:
+    """Score the latest bar of ``df`` (OHLCV, ascending by date).
+
+    ``pullback_rsi`` (None = off) enables the pullback entry: while price is
+    above its ``long_sma_days`` SMA, an RSI below ``pullback_rsi`` and a retest
+    of the SMA50 score as buy-side, and the bar is flagged ``dip_entry``.
+    """
     if df is None or len(df) < 50:
         return LayerScore(score=0.0, subsignals=[], extra={"note": "insufficient history (<50 bars)"})
 
@@ -67,10 +79,22 @@ def technical_score(df: pd.DataFrame) -> LayerScore:
             subs.append(SubSignal("price_vs_sma50", "Price below SMA50", -_W_PRICE_VS_SMA))
             score -= _W_PRICE_VS_SMA
 
+    # Long-term trend, used only by the pullback entry.
+    long_uptrend = False
+    if pullback_rsi is not None and long_sma_days > 0 and len(df) >= long_sma_days:
+        long_sma = float(df["close"].iloc[-long_sma_days:].mean())
+        long_uptrend = close > long_sma
+
     # 3) RSI (mean-reversion bias for swing horizon).
+    dip_entry = False
     if _valid(last["rsi_14"]):
         r = float(last["rsi_14"])
-        if r < 30:
+        if long_uptrend and r < pullback_rsi:
+            dip_entry = True
+        if long_uptrend and 30 <= r < pullback_rsi:
+            subs.append(SubSignal("rsi", f"RSI {r:.0f} pullback in long-term uptrend", _W_RSI))
+            score += _W_RSI
+        elif r < 30:
             subs.append(SubSignal("rsi", f"RSI {r:.0f} oversold", _W_RSI))
             score += _W_RSI
         elif r > 70:
@@ -85,6 +109,14 @@ def technical_score(df: pd.DataFrame) -> LayerScore:
         elif last["macd_hist"] < -_EPS:
             subs.append(SubSignal("macd", "MACD below signal", -_W_MACD))
             score -= _W_MACD
+
+    # 4b) Pullback: price retesting the SMA50 inside a long-term uptrend.
+    if long_uptrend and _valid(last["sma_50"]) and last["sma_50"]:
+        gap = (close - last["sma_50"]) / abs(last["sma_50"])
+        if abs(gap) <= _NEAR_SMA50_BAND:
+            subs.append(SubSignal("near_sma50", f"Price retesting SMA50 ({gap * 100:+.1f}%) in uptrend", _W_NEAR_SMA50))
+            score += _W_NEAR_SMA50
+            dip_entry = True
 
     # 5) Breakout with volume confirmation.
     if len(df) > _BREAKOUT_LOOKBACK and "volume" in df:
@@ -106,5 +138,6 @@ def technical_score(df: pd.DataFrame) -> LayerScore:
             "atr": round(float(atr_val), 4) if atr_val is not None else None,
             "close": round(close, 4),
             "rsi_14": round(float(last["rsi_14"]), 2) if _valid(last["rsi_14"]) else None,
+            "dip_entry": dip_entry,
         },
     )

@@ -49,6 +49,20 @@ def audit(db) -> dict:
         add("warn", "Aggressive risk per trade", f"{s.risk_per_trade_pct}% risk per trade is high; a "
             "losing streak compounds fast.", "1% is the typical/conservative default.")
 
+    dip_on = [n for n, on in (
+        ("two-speed regime", s.regime_mode == "two_speed"),
+        ("pullback entry", s.pullback_entry),
+        ("contrarian Fear & Greed", s.sentiment_mode == "contrarian"),
+    ) if on]
+    if dip_on:
+        add("info", "Dip-buying switches are on", f"Active: {', '.join(dip_on)}. The momentum backtest "
+            "below doesn't use them.", "Validate them with the Technical backtest + 'BTC regime & "
+            "Fear/Greed' ticked, compared with the same run with the switches off.")
+    if s.dca_enabled:
+        add("info", "Accumulation is on", f"Buys ${s.dca_amount_usd} of {s.dca_ticker} every "
+            f"{s.dca_interval_days} days while it is at least {s.dca_min_drawdown_pct}% below its "
+            "1-year high. It's clipped to the Bot page's per-order/daily caps and is never auto-sold.", None)
+
     # --- performance: fresh momentum backtest with current settings ---
     metrics = None
     ids = prices_repo.security_ids_with_bars(db)

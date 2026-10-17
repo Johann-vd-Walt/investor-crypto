@@ -73,6 +73,7 @@ export default function Backtest() {
   const [topK, setTopK] = useState('10')
   const [rebalance, setRebalance] = useState('21')
   const [trials, setTrials] = useState('1')
+  const [withContext, setWithContext] = useState(false)
 
   const tech = useMutation({
     mutationFn: () =>
@@ -80,6 +81,7 @@ export default function Backtest() {
         tickers: tickers.trim() ? tickers.split(',').map((t) => t.trim().toUpperCase()) : undefined,
         split_date: splitDate || undefined,
         trials: Math.max(1, Number(trials) || 1),
+        include_context: withContext,
       }),
   })
   const mom = useMutation({
@@ -182,6 +184,12 @@ export default function Backtest() {
               <input type="number" value={rebalance} onChange={(e) => setRebalance(e.target.value)} style={{ width: '4rem' }} min="5" />
             </label>
           </>
+        )}
+        {strategy === 'technical' && (
+          <label title="Blend in the BTC regime and Fear & Greed as they were on each past date (no lookahead). Needed to test the two-speed regime and contrarian sentiment switches.">
+            <input type="checkbox" checked={withContext} onChange={(e) => setWithContext(e.target.checked)} />{' '}
+            + BTC regime &amp; Fear/Greed
+          </label>
         )}
         <label title="How many settings have you tried? The Deflated Sharpe penalises the result for this many attempts.">Configs tried{' '}
           <input type="number" value={trials} onChange={(e) => setTrials(e.target.value)} style={{ width: '4rem' }} min="1" />

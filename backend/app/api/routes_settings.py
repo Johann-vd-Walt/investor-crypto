@@ -44,6 +44,20 @@ class SettingsResponse(BaseModel):
     max_open_positions: int
     max_positions_per_sector: int
     trailing_stop_pct: float
+    regime_mode: str
+    regime_long_sma_days: int
+    pullback_entry: bool
+    pullback_rsi: float
+    sentiment_mode: str
+    contrarian_band: int
+    dip_horizon_days: int
+    dip_atr_stop_multiple: float
+    luno_only_universe: bool
+    dca_enabled: bool
+    dca_ticker: str
+    dca_amount_usd: float
+    dca_interval_days: int
+    dca_min_drawdown_pct: float
     weight_sum: float
     weights_ok: bool
     overrides: dict[str, Any]  # which fields are currently overridden
@@ -80,6 +94,20 @@ def _response(db: Session) -> SettingsResponse:
         max_open_positions=eff.max_open_positions,
         max_positions_per_sector=eff.max_positions_per_sector,
         trailing_stop_pct=float(eff.trailing_stop_pct),
+        regime_mode=eff.regime_mode,
+        regime_long_sma_days=eff.regime_long_sma_days,
+        pullback_entry=eff.pullback_entry,
+        pullback_rsi=eff.pullback_rsi,
+        sentiment_mode=eff.sentiment_mode,
+        contrarian_band=eff.contrarian_band,
+        dip_horizon_days=eff.dip_horizon_days,
+        dip_atr_stop_multiple=float(eff.dip_atr_stop_multiple),
+        luno_only_universe=eff.luno_only_universe,
+        dca_enabled=eff.dca_enabled,
+        dca_ticker=eff.dca_ticker,
+        dca_amount_usd=float(eff.dca_amount_usd),
+        dca_interval_days=eff.dca_interval_days,
+        dca_min_drawdown_pct=float(eff.dca_min_drawdown_pct),
         weight_sum=round(eff.weight_sum, 4),
         weights_ok=abs(eff.weight_sum - 1.0) <= 1e-6,
         overrides=settings_service.get_overrides(db),

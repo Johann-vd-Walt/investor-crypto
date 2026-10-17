@@ -12,6 +12,10 @@ still open at the end of data are marked ``open_at_end`` and flagged.
 
 Out-of-sample: metrics are computed for the full window AND for trades entered
 on/after a split date (the honest headline). Long-only (BUY signals).
+
+Optional CONTEXT mode: the BTC regime and the Fear & Greed index DO have honest
+point-in-time history (BTC closes; daily F&G), so they can be blended in as of
+each bar's date with no lookahead. Flow, momentum and news stay excluded.
 """
 
 from __future__ import annotations
@@ -25,8 +29,10 @@ import pandas as pd
 
 from app.config import Settings
 from app.db.models import SignalDirection
-from app.signals import paper
-from app.signals.engine import compute_trade_levels
+from app.signals import macro_regime, paper
+from app.signals.engine import compute_trade_levels, is_dip_entry, pullback_rsi_for, trade_plan
+from app.signals.scoring import clamp
+from app.signals.sentiment import fear_greed_sentiment
 from app.signals.technical import technical_score
 
 MIN_BARS = 50
@@ -81,6 +87,44 @@ def _df(bars) -> pd.DataFrame:
     )
 
 
+def context_by_date(
+    btc: list[tuple[date, float]],
+    fng: list[tuple[date, float]],
+    settings: Settings,
+) -> dict[date, tuple[float, float]]:
+    """Point-in-time (regime_score, sentiment_score) for each BTC date.
+
+    The regime at date d uses only BTC closes up to d; sentiment is the latest
+    Fear & Greed reading on/before d (0.0 if none yet). Both use the current
+    regime_mode / sentiment_mode settings."""
+    out: dict[date, tuple[float, float]] = {}
+    closes = [c for _d, c in btc]
+    fng_sorted = sorted(fng)
+    j = -1
+    for i, (d, _c) in enumerate(btc):
+        layer = macro_regime.macro_regime_score(
+            {"BTC": closes[: i + 1]}, mode=settings.regime_mode,
+            long_sma_days=settings.regime_long_sma_days,
+        )
+        while j + 1 < len(fng_sorted) and fng_sorted[j + 1][0] <= d:
+            j += 1
+        sent = fear_greed_sentiment(
+            fng_sorted[j][1], mode=settings.sentiment_mode, band=settings.contrarian_band
+        ) if j >= 0 else 0.0
+        out[d] = (layer.score, sent)
+    return out
+
+
+def _context_fused(tech_score: float, ctx: tuple[float, float], settings: Settings) -> float:
+    """Blend technical + regime + sentiment with the configured weights,
+    renormalised over just those three layers (the backtestable ones)."""
+    wt, wm, ws = settings.weight_technical, settings.weight_macro, settings.weight_sentiment
+    total = wt + wm + ws
+    if total <= 0:
+        return tech_score
+    return clamp((wt * tech_score + wm * ctx[0] + ws * ctx[1]) / total)
+
+
 def walk_forward(
     *,
     ticker: str,
@@ -88,26 +132,42 @@ def walk_forward(
     settings: Settings,
     costs: paper.Costs,
     min_bars: int = MIN_BARS,
+    context: dict[date, tuple[float, float]] | None = None,
 ) -> list[BacktestTrade]:
-    """Simulate long trades from technical BUY signals over ``bars`` (asc)."""
+    """Simulate long trades from BUY signals over ``bars`` (asc).
+
+    Without ``context`` the signal is the technical score alone (original
+    behaviour). With it, technical is fused with the point-in-time regime and
+    sentiment for each bar's date; bars with no context are skipped."""
     if len(bars) < min_bars + 1:
         return []
 
     df = _df(bars)
     index_of = {b.bar_datetime: i for i, b in enumerate(bars)}
     trades: list[BacktestTrade] = []
+    pb_rsi = pullback_rsi_for(settings)
 
     i = min_bars - 1
     while i < len(bars):
-        tech = technical_score(df.iloc[: i + 1])
-        if tech.score < settings.buy_threshold:
+        tech = technical_score(df.iloc[: i + 1], pullback_rsi=pb_rsi,
+                               long_sma_days=settings.regime_long_sma_days)
+        score = tech.score
+        if context is not None:
+            ctx = context.get(bars[i].bar_datetime.date())
+            if ctx is None:
+                i += 1
+                continue
+            score = _context_fused(tech.score, ctx, settings)
+        if score < settings.buy_threshold:
             i += 1
             continue
 
         close = tech.extra.get("close")
         atr = tech.extra.get("atr")
+        horizon, atr_mult = trade_plan(is_dip_entry(tech.extra, settings), settings)
         entry, stop, size = compute_trade_levels(
-            direction=SignalDirection.BUY, close_cents=close, atr_cents=atr, settings=settings
+            direction=SignalDirection.BUY, close_cents=close, atr_cents=atr, settings=settings,
+            atr_multiple=atr_mult,
         )
         if not (entry and stop and size and size > 0):
             i += 1
@@ -120,7 +180,7 @@ def walk_forward(
         decision = paper.evaluate_exit(
             entry_datetime=bars[i].bar_datetime,
             stop_price=stop,
-            horizon_days=settings.default_horizon_days,
+            horizon_days=horizon,
             bars=future,
             entry_price=entry,
             trailing_pct=settings.trailing_stop_pct,

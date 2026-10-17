@@ -7,6 +7,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.brokers.mapping import is_tradeable
 from app.db.session import get_db
 from app.repositories import macro as macro_repo
 from app.repositories import prices as prices_repo
@@ -36,6 +37,12 @@ _SCOPE_NOTE = (
     "Technical-signal walk-forward only (SMA/EMA/RSI/MACD/breakout). Macro regime "
     "and news sentiment are excluded — no reliable point-in-time history, and using "
     "current values on past dates would be lookahead. Net of brokerage + slippage."
+)
+_SCOPE_NOTE_CONTEXT = (
+    "Technical signal FUSED with the point-in-time BTC regime and Fear & Greed "
+    "(each as of the bar's own date — no lookahead), weights renormalised over those "
+    "three layers. Flow, momentum and news are excluded (no honest history). Net of "
+    "brokerage + slippage."
 )
 _DISCLAIMER = (
     "Past simulated performance does not predict future results. All figures are "
@@ -94,6 +101,16 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
     else:
         ids = prices_repo.security_ids_with_bars(db)
         secs = [s for i in ids if (s := securities_repo.get_by_id(db, i))]
+    if settings.luno_only_universe:
+        secs = [s for s in secs if is_tradeable(s.ticker)]
+
+    context = None
+    if payload.include_context:
+        btc_sec = securities_repo.get_by_ticker(db, "BTCUSDT")
+        btc_bars = prices_repo.get_bars(db, security_id=btc_sec.id) if btc_sec else []
+        btc = [(b.bar_datetime.date(), float(b.close)) for b in btc_bars]
+        fng = [(o.observation_date, float(o.value)) for o in macro_repo.get_series(db, series_code="FNG")]
+        context = bt.context_by_date(btc, fng, settings)
 
     all_trades: list[bt.BacktestTrade] = []
     bars_by_sec: dict[str, list] = {}
@@ -108,7 +125,9 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
         ):
             continue
         bars_by_sec[sec.ticker] = bars
-        all_trades.extend(bt.walk_forward(ticker=sec.ticker, bars=bars, settings=settings, costs=costs))
+        all_trades.extend(bt.walk_forward(
+            ticker=sec.ticker, bars=bars, settings=settings, costs=costs, context=context,
+        ))
 
     account_cents = settings.account_size * Decimal(100)
     full_metrics, full_curve = bt.summarize(all_trades)
@@ -170,7 +189,7 @@ def run_backtest(payload: BacktestRequest, db: Session = Depends(get_db)) -> Bac
             )
             for f in folds
         ],
-        scope_note=_SCOPE_NOTE,
+        scope_note=_SCOPE_NOTE_CONTEXT if payload.include_context else _SCOPE_NOTE,
         disclaimer=_DISCLAIMER,
     )
 
@@ -197,6 +216,8 @@ def run_momentum_backtest(payload: MomentumRequest, db: Session = Depends(get_db
         ids = prices_repo.security_ids_with_bars(db)
         secs = [s for i in ids if (s := securities_repo.get_by_id(db, i))]
 
+    if settings.luno_only_universe:
+        secs = [s for s in secs if is_tradeable(s.ticker)]
     bars_by_ticker = {s.ticker: prices_repo.get_bars(db, security_id=s.id) for s in secs}
     bars_by_ticker = {tk: b for tk, b in bars_by_ticker.items() if len(b) >= 2}
 

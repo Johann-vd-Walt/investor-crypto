@@ -42,7 +42,9 @@ from app.providers.sens_rss import SensRssProvider
 from app.services import settings as settings_service
 from app.signals import indicators as indicators_calc
 from app.signals import engine as signal_engine
+from app.brokers.mapping import is_tradeable
 from app.signals import macro_regime, momentum, paper, performance
+from app.signals.sentiment import fear_greed_sentiment
 
 logger = logging.getLogger("app.ingestion")
 
@@ -376,6 +378,15 @@ def compute_indicators(*, db: Session | None = None) -> dict:
     return summary
 
 
+def btc_closes(db: Session) -> list[float]:
+    """BTC daily closes, oldest first: the macro 'BTC' series or the BTCUSDT
+    price bars, whichever has more history (the two-speed regime needs ~200)."""
+    macro = [float(o.value) for o in macro_repo.get_series(db, series_code="BTC")]
+    sec = securities_repo.get_by_ticker(db, "BTCUSDT")
+    bars = [float(b.close) for b in prices_repo.get_bars(db, security_id=sec.id)] if sec else []
+    return bars if len(bars) > len(macro) else macro
+
+
 def generate_signals(tickers: list[str] | None = None, *, db: Session | None = None) -> dict:
     """Run the engine over target securities and write signals (§9, §10)."""
     owns_session = db is None
@@ -384,17 +395,20 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
     summary = {"generated": 0, "errors": {}, "targets": 0}
     try:
         # Market regime: computed once from the BTC series (crypto 'market').
-        macro_series = {
-            "BTC": [float(o.value) for o in macro_repo.get_series(db, series_code="BTC")]
-        }
-        macro_layer = macro_regime.macro_regime_score(macro_series)
+        macro_series = {"BTC": btc_closes(db)}
+        macro_layer = macro_regime.macro_regime_score(
+            macro_series, mode=settings.regime_mode, long_sma_days=settings.regime_long_sma_days
+        )
 
         # Market-wide sentiment from the latest Fear & Greed index (0..100),
-        # mapped to [-1, 1] (greed = positive). Same for every asset.
+        # mapped to [-1, 1] per sentiment_mode (trend or contrarian). Same for
+        # every asset.
         fng = macro_repo.get_latest(db, series_code="FNG")
         fng_pairs: list[tuple[float, float]] = []
         if fng is not None:
-            fng_sent = max(-1.0, min(1.0, (float(fng.value) - 50.0) / 50.0))
+            fng_sent = fear_greed_sentiment(
+                float(fng.value), mode=settings.sentiment_mode, band=settings.contrarian_band
+            )
             fng_pairs = [(fng_sent, 1.0)] * 5  # 5 -> full conviction (no volume damping)
 
         # Confidence from the bot's REAL (Luno) track record once it has enough
@@ -412,6 +426,8 @@ def generate_signals(tickers: list[str] | None = None, *, db: Session | None = N
             # watchlist. The watchlist is a UI favourites list, not a limiter.
             ids = prices_repo.security_ids_with_bars(db)
             targets = [s for i in ids if (s := securities_repo.get_by_id(db, i))]
+        if settings.luno_only_universe:
+            targets = [s for s in targets if is_tradeable(s.ticker)]
         summary["targets"] = len(targets)
         summary["skipped_illiquid"] = 0
         summary["capped"] = 0

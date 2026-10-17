@@ -453,6 +453,9 @@ class BotPosition(Base):
     # 'paper' (simulated) or 'luno' (real). Real positions carry the Luno order id.
     venue: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'paper'"))
     luno_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 'signal' = opened on a strategy BUY (exits on stop/horizon); 'dca' = an
+    # accumulation buy, held indefinitely and never auto-sold by the bot.
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'signal'"))
 
 
 class BotEvent(Base):

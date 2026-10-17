@@ -135,6 +135,38 @@ class Settings(BaseSettings):
     # Trailing stop as % below the highest close since entry (0 = disabled).
     trailing_stop_pct: Decimal = Field(default=Decimal("0"), alias="TRAILING_STOP_PCT")
 
+    # --- Dip-buying controls (all OFF by default = the original strategy) ---
+    # Market regime: 'classic' = BTC 20-day change only (flips on a ±3% edge);
+    # 'two_speed' = long-term trend (BTC vs its N-day SMA) + the 20-day move, so a
+    # pullback inside a long-term uptrend reads as a dip-buy window, not risk-off.
+    regime_mode: str = Field(default="classic", alias="REGIME_MODE")
+    regime_long_sma_days: int = Field(default=200, alias="REGIME_LONG_SMA_DAYS")
+    # Pullback entry: when a coin is above its long-term SMA, score RSI below
+    # ``pullback_rsi`` (not just <30) and a retest of the SMA50 as buy-side.
+    pullback_entry: bool = Field(default=False, alias="PULLBACK_ENTRY")
+    pullback_rsi: float = Field(default=40.0, alias="PULLBACK_RSI")
+    # Sentiment: 'trend' = greed positive / fear negative (original);
+    # 'contrarian' = extreme fear (<= band) positive, extreme greed (>= 100-band)
+    # negative, neutral in between.
+    sentiment_mode: str = Field(default="trend", alias="SENTIMENT_MODE")
+    contrarian_band: int = Field(default=25, alias="CONTRARIAN_BAND")
+    # Dip entries (pullback fired) hold longer with a wider stop. The risk rule
+    # automatically shrinks the size to keep the same $ risk.
+    dip_horizon_days: int = Field(default=25, alias="DIP_HORIZON_DAYS")
+    dip_atr_stop_multiple: Decimal = Field(default=Decimal("3.0"), alias="DIP_ATR_STOP_MULTIPLE")
+    # Restrict signals/backtests to coins Luno can actually trade in USDT.
+    luno_only_universe: bool = Field(default=False, alias="LUNO_ONLY_UNIVERSE")
+
+    # --- Accumulation (recurring buy, executed by the bot) — OFF by default ---
+    # Buys ``dca_amount_usd`` of ``dca_ticker`` every ``dca_interval_days``, only
+    # while price is at least ``dca_min_drawdown_pct`` below its 365-day high
+    # (0 = always). Accumulated coins are never auto-sold by the bot.
+    dca_enabled: bool = Field(default=False, alias="DCA_ENABLED")
+    dca_ticker: str = Field(default="BTCUSDT", alias="DCA_TICKER")
+    dca_amount_usd: Decimal = Field(default=Decimal("10"), alias="DCA_AMOUNT_USD")
+    dca_interval_days: int = Field(default=7, alias="DCA_INTERVAL_DAYS")
+    dca_min_drawdown_pct: Decimal = Field(default=Decimal("20"), alias="DCA_MIN_DRAWDOWN_PCT")
+
     # --- Auth: global TOTP gate (Google Authenticator) ---
     # Base32 secret. BLANK = auth disabled (no login required — safe default so
     # you can't lock yourself out before enrolling). Run `python -m app.auth_setup`

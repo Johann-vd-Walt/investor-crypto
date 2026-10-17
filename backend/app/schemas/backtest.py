@@ -15,6 +15,7 @@ class BacktestRequest(BaseModel):
     split_date: date | None = Field(default=None, description="Out-of-sample trades entered on/after this date")
     overrides: dict[str, Any] = Field(default_factory=dict, description="One-off tunable overrides (not persisted)")
     trials: int = Field(default=1, ge=1, le=100000, description="How many strategy configs you've tried — used to DEFLATE the Sharpe for selection bias. Be honest: 1 if this is the first run.")
+    include_context: bool = Field(default=False, description="Blend the point-in-time BTC regime and Fear & Greed into the technical score (no lookahead). Off = technical only.")
 
 
 class MetricsOut(BaseModel):

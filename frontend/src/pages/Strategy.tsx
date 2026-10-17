@@ -13,7 +13,14 @@ const pct = (n: number | null | undefined) => (n == null ? '—' : `${n.toFixed(
 
 type FieldKey = keyof AppSettings
 
-const META: Partial<Record<FieldKey, { label: string; step: string }>> = {
+interface FieldMeta {
+  label: string
+  step?: string
+  kind?: 'number' | 'bool' | 'select' | 'text'
+  options?: { value: string; label: string }[]
+}
+
+const META: Partial<Record<FieldKey, FieldMeta>> = {
   weight_technical: { label: 'Weight · technical', step: '0.05' },
   weight_macro: { label: 'Weight · macro/regime', step: '0.05' },
   weight_sentiment: { label: 'Weight · sentiment', step: '0.05' },
@@ -36,6 +43,32 @@ const META: Partial<Record<FieldKey, { label: string; step: string }>> = {
   stt_pct: { label: 'STT (%, 0 for crypto)', step: '0.05' },
   min_liquidity_zar: { label: 'Min liquidity (USDT/day)', step: '500000' },
   liquidity_lookback_days: { label: 'Liquidity lookback (days)', step: '1' },
+  regime_mode: {
+    label: 'Regime mode', kind: 'select',
+    options: [
+      { value: 'classic', label: 'Classic (BTC 20-day move only)' },
+      { value: 'two_speed', label: 'Two-speed (long-term trend + 20-day move)' },
+    ],
+  },
+  regime_long_sma_days: { label: 'Long-term trend SMA (days)', step: '10' },
+  sentiment_mode: {
+    label: 'Fear & Greed mode', kind: 'select',
+    options: [
+      { value: 'trend', label: 'Trend (greed +, fear −)' },
+      { value: 'contrarian', label: 'Contrarian (extreme fear +, extreme greed −)' },
+    ],
+  },
+  contrarian_band: { label: 'Contrarian band (F&G ≤ band / ≥ 100−band)', step: '5' },
+  pullback_entry: { label: 'Pullback entry', kind: 'bool' },
+  pullback_rsi: { label: 'Pullback RSI below', step: '1' },
+  dip_horizon_days: { label: 'Dip-entry hold (days, 0 = normal)', step: '1' },
+  dip_atr_stop_multiple: { label: 'Dip-entry ATR stop multiple', step: '0.25' },
+  luno_only_universe: { label: 'Only coins tradeable on Luno', kind: 'bool' },
+  dca_enabled: { label: 'Accumulation on', kind: 'bool' },
+  dca_ticker: { label: 'Coin (e.g. BTCUSDT)', kind: 'text' },
+  dca_amount_usd: { label: 'Amount per buy (USDT)', step: '5' },
+  dca_interval_days: { label: 'Every (days)', step: '1' },
+  dca_min_drawdown_pct: { label: 'Only when ≥ % below 1-year high (0 = always)', step: '5' },
 }
 
 const ALL_FIELDS = Object.keys(META) as FieldKey[]
@@ -87,23 +120,35 @@ const SECTIONS: Section[] = [
     id: 'macro',
     title: '3 · Macro / regime layer',
     body: (
+      <>
       <p>One market-wide read taken from <strong>Bitcoin's trend</strong>. Because the whole market
       tends to follow BTC, this layer <strong>damps buys when BTC is in a downtrend</strong> and
       supports them when it's rising — the app's "don't fight the tide." Same value applied to every
       coin. Influence set by <em>Weight · macro/regime</em>.</p>
+      <p><strong>Classic</strong> looks only at BTC's 20-day move, so it flips to "risk-off" on a
+      ±3% edge, even in the middle of a bull market. <strong>Two-speed</strong> first asks whether
+      BTC is above its long-term average (the trend), then uses the 20-day move for the phase. A
+      pullback while BTC is still above its long-term trend counts as a <strong>dip-buy window</strong>
+      (mildly positive) instead of risk-off. Below the long-term trend it stays defensive.</p>
+      </>
     ),
-    fields: [],
+    fields: ['regime_mode', 'regime_long_sma_days'],
   },
   {
     id: 'sentiment',
     title: '4 · Sentiment layer',
     body: (
+      <>
       <p>The <strong>Fear &amp; Greed index</strong> (0–100), mapped to −1..+1 and applied
-      market-wide. The classic read is <strong>contrarian at extremes</strong>: extreme fear can be
-      opportunity, extreme greed a caution. It's a weak, slow signal — keep its weight modest.
-      Influence set by <em>Weight · sentiment</em>. See it live on the <Link to="/context">Context</Link> page.</p>
+      market-wide. It's a weak, slow signal, so keep its weight modest. Influence set by
+      <em> Weight · sentiment</em>. See it live on the <Link to="/context">Context</Link> page.</p>
+      <p><strong>Trend</strong> mode (original) scores fear as negative, so the deeper a sell-off goes the
+      less the bot wants to buy. <strong>Contrarian</strong> mode scores only the extremes: fear at or
+      below the band is buy-side, greed at or above 100 − band is sell-side, and the middle is neutral.
+      The evidence for contrarian F&amp;G is weaker than for the trend tools.</p>
+      </>
     ),
-    fields: [],
+    fields: ['sentiment_mode', 'contrarian_band'],
   },
   {
     id: 'momentum',
@@ -138,6 +183,43 @@ const SECTIONS: Section[] = [
       </>
     ),
     fields: ['flow_momentum_days'],
+  },
+  {
+    id: 'dip',
+    title: '5c · Dip buying',
+    tag: 'opt-in',
+    body: (
+      <>
+        <p>The original technical layer only rewards RSI below 30, which rarely happens in a pullback
+        inside an uptrend. With <strong>pullback entry</strong> on, while a coin is above its long-term
+        average (same SMA length as the regime), an RSI below the pullback level and a retest of the
+        50-day average both count as buy-side. Such a trade is a <strong>dip entry</strong>: it holds
+        longer and uses a wider stop. The risk rule then makes the position smaller, so the dollar
+        risk stays the same.</p>
+        <p><strong>Only coins tradeable on Luno</strong> limits signals and backtests to the coins the
+        live bot can actually buy, so what you test is what you trade.</p>
+        <p>Test before you trust: run the <Link to="/backtest">Technical backtest</Link> with
+        <em> + BTC regime &amp; Fear/Greed</em> ticked, before and after.</p>
+      </>
+    ),
+    fields: ['pullback_entry', 'pullback_rsi', 'dip_horizon_days', 'dip_atr_stop_multiple', 'luno_only_universe'],
+  },
+  {
+    id: 'dca',
+    title: '5d · Accumulation (recurring buy)',
+    tag: 'opt-in',
+    body: (
+      <>
+        <p>This doesn't try to time the market. The <Link to="/bot">bot</Link> buys a fixed amount of
+        one coin every N days, but <strong>only while the price is at least the set % below its 1-year
+        high</strong> (0 = always). These holdings are <strong>never auto-sold</strong>. They show as
+        ACCUM on the Bot page and are kept separate from signal trades.</p>
+        <p>The same safety rails apply: paper by default, the dry-run switch, and the per-order and
+        daily caps on the Bot page. The amount per buy is clipped to those caps. It only runs while
+        the bot is started.</p>
+      </>
+    ),
+    fields: ['dca_enabled', 'dca_ticker', 'dca_amount_usd', 'dca_interval_days', 'dca_min_drawdown_pct'],
   },
   {
     id: 'risk',
@@ -199,8 +281,11 @@ export default function Strategy() {
 
   const save = useMutation({
     mutationFn: () => {
-      const overrides: Record<string, number> = {}
-      for (const k of ALL_FIELDS) overrides[k] = Number(form[k])
+      const overrides: Record<string, number | string | boolean> = {}
+      for (const k of ALL_FIELDS) {
+        const kind = META[k]!.kind ?? 'number'
+        overrides[k] = kind === 'number' ? Number(form[k]) : kind === 'bool' ? form[k] === 'true' : form[k]
+      }
       return api.updateSettings(overrides)
     },
     onSuccess: () => {
@@ -217,11 +302,22 @@ export default function Strategy() {
 
   const field = (k: FieldKey) => {
     const m = META[k]!
+    const set = (v: string) => setForm((f) => ({ ...f, [k]: v }))
+    const kind = m.kind ?? 'number'
     return (
       <label key={k} className="settings-field">
         <span>{m.label}</span>
-        <input type="number" step={m.step} value={form[k] ?? ''}
-          onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />
+        {kind === 'bool' ? (
+          <input type="checkbox" checked={form[k] === 'true'}
+            onChange={(e) => set(e.target.checked ? 'true' : 'false')} />
+        ) : kind === 'select' ? (
+          <select value={form[k] ?? ''} onChange={(e) => set(e.target.value)}>
+            {m.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : (
+          <input type={kind === 'text' ? 'text' : 'number'} step={m.step} value={form[k] ?? ''}
+            onChange={(e) => set(e.target.value)} />
+        )}
       </label>
     )
   }

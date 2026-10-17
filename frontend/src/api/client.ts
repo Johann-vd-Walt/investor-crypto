@@ -372,6 +372,20 @@ export interface AppSettings {
   max_open_positions: number
   max_positions_per_sector: number
   trailing_stop_pct: number
+  regime_mode: 'classic' | 'two_speed'
+  regime_long_sma_days: number
+  pullback_entry: boolean
+  pullback_rsi: number
+  sentiment_mode: 'trend' | 'contrarian'
+  contrarian_band: number
+  dip_horizon_days: number
+  dip_atr_stop_multiple: number
+  luno_only_universe: boolean
+  dca_enabled: boolean
+  dca_ticker: string
+  dca_amount_usd: number
+  dca_interval_days: number
+  dca_min_drawdown_pct: number
   weight_sum: number
   weights_ok: boolean
   overrides: Record<string, unknown>
@@ -541,6 +555,7 @@ export interface BotPosition {
   live_price: number | null
   cost_basis: number
   venue: string
+  kind: 'signal' | 'dca'
   market_value: number | null
   unrealized_pnl: number | null
   unrealized_pct: number | null
@@ -686,7 +701,7 @@ export const api = {
   getTaxSummary: (taxYear?: number) =>
     request<TaxSummary>(`/api/trades/tax-summary${taxYear ? `?tax_year=${taxYear}` : ''}`),
 
-  runBacktest: (body: { tickers?: string[]; split_date?: string; trials?: number; overrides?: Record<string, unknown> }) =>
+  runBacktest: (body: { tickers?: string[]; split_date?: string; trials?: number; overrides?: Record<string, unknown>; include_context?: boolean }) =>
     request<BacktestResponse>('/api/backtest', { method: 'POST', body: JSON.stringify(body) }),
 
   runMomentumBacktest: (body: { tickers?: string[]; top_k?: number; rebalance_days?: number; split_date?: string; trials?: number }) =>

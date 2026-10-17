@@ -79,6 +79,24 @@ def flow_score(price_df: pd.DataFrame, taker_ratio: float | None, *, days: int =
     return clamp(0.6 * mom + 0.4 * pressure)
 
 
+def pullback_rsi_for(s: Settings) -> float | None:
+    """The pullback-entry RSI level, or None when the pullback entry is off."""
+    return float(s.pullback_rsi) if s.pullback_entry else None
+
+
+def is_dip_entry(tech_extra: dict, s: Settings) -> bool:
+    """A dip entry = the pullback entry is on and it fired on this bar."""
+    return bool(s.pullback_entry and tech_extra.get("dip_entry"))
+
+
+def trade_plan(dip: bool, s: Settings) -> tuple[int, Decimal]:
+    """(horizon_days, atr_stop_multiple) — dip entries hold longer with a wider
+    stop; the risk rule then sizes them smaller for the same $ risk."""
+    if dip and s.dip_horizon_days > 0 and s.dip_atr_stop_multiple > 0:
+        return s.dip_horizon_days, s.dip_atr_stop_multiple
+    return s.default_horizon_days, s.atr_stop_multiple
+
+
 def _direction(score: float, s: Settings) -> SignalDirection:
     if score >= s.buy_threshold:
         return SignalDirection.BUY
@@ -93,6 +111,7 @@ def compute_trade_levels(
     close_cents: float | None,
     atr_cents: float | None,
     settings: Settings,
+    atr_multiple: Decimal | None = None,
 ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
     """Return (entry, stop, size) in native quote units. Shared by the engine and
     the backtester so live and simulated trades size identically.
@@ -106,7 +125,8 @@ def compute_trade_levels(
     if entry is None or atr_cents is None or direction == SignalDirection.HOLD:
         return entry, None, None
 
-    atr_dist = Decimal(str(atr_cents)) * settings.atr_stop_multiple
+    mult = atr_multiple if atr_multiple is not None else settings.atr_stop_multiple
+    atr_dist = Decimal(str(atr_cents)) * mult
     stop = entry - atr_dist if direction == SignalDirection.BUY else entry + atr_dist
 
     risk_budget = settings.account_size * (settings.risk_per_trade_pct / Decimal(100))
@@ -141,7 +161,8 @@ def build_signal(
     momentum_score: float = 0.0,
     flow: float = 0.0,
 ) -> SignalDraft:
-    tech = technical_score(price_df)
+    tech = technical_score(price_df, pullback_rsi=pullback_rsi_for(settings),
+                           long_sma_days=settings.regime_long_sma_days)
     sent = sentiment_score(sentiment_pairs, event_flag=event_flag)
 
     tilt = macro_regime.sector_tilt(macro_layer, sector)
@@ -162,8 +183,11 @@ def build_signal(
     # Entry / stop / size (prices in cents) — shared with the backtester.
     atr = tech.extra.get("atr")
     close = tech.extra.get("close")
+    dip = is_dip_entry(tech.extra, settings)
+    horizon, atr_mult = trade_plan(dip, settings)
     entry, stop, size = compute_trade_levels(
-        direction=direction, close_cents=close, atr_cents=atr, settings=settings
+        direction=direction, close_cents=close, atr_cents=atr, settings=settings,
+        atr_multiple=atr_mult,
     )
 
     rationale = {
@@ -184,14 +208,16 @@ def build_signal(
         "sizing": {
             "account_size": str(settings.account_size),
             "risk_per_trade_pct": str(settings.risk_per_trade_pct),
-            "atr_stop_multiple": str(settings.atr_stop_multiple),
+            "atr_stop_multiple": str(atr_mult),
+            "horizon_days": horizon,
+            "dip_entry": dip,
         },
     }
 
     return SignalDraft(
         security_id=security_id,
         generated_at=generated_at,
-        horizon_days=settings.default_horizon_days,
+        horizon_days=horizon,
         direction=direction,
         score=_dec(fused),
         confidence=confidence,

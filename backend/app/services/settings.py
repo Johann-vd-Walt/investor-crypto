@@ -40,7 +40,42 @@ TUNABLE: dict[str, type] = {
     "max_open_positions": int,
     "max_positions_per_sector": int,
     "trailing_stop_pct": Decimal,
+    # Dip-buying controls.
+    "regime_mode": str,
+    "regime_long_sma_days": int,
+    "pullback_entry": bool,
+    "pullback_rsi": float,
+    "sentiment_mode": str,
+    "contrarian_band": int,
+    "dip_horizon_days": int,
+    "dip_atr_stop_multiple": Decimal,
+    "luno_only_universe": bool,
+    # Accumulation (recurring buy).
+    "dca_enabled": bool,
+    "dca_ticker": str,
+    "dca_amount_usd": Decimal,
+    "dca_interval_days": int,
+    "dca_min_drawdown_pct": Decimal,
 }
+
+# String settings restricted to a fixed set of values.
+_CHOICES: dict[str, tuple[str, ...]] = {
+    "regime_mode": ("classic", "two_speed"),
+    "sentiment_mode": ("trend", "contrarian"),
+}
+
+
+def _to_bool(value) -> bool:
+    """Strict bool: ``bool("false")`` is True in Python, so parse text explicitly."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in ("true", "1", "yes", "on"):
+        return True
+    if isinstance(value, str) and value.strip().lower() in ("false", "0", "no", "off"):
+        return False
+    raise ValueError(value)
 
 
 def _coerce(field: str, value):
@@ -48,6 +83,17 @@ def _coerce(field: str, value):
     try:
         if typ is Decimal:
             return Decimal(str(value))
+        if typ is bool:
+            return _to_bool(value)
+        if typ is str:
+            out = str(value).strip()
+            if field == "dca_ticker":
+                out = out.upper()
+            if field in _CHOICES and out not in _CHOICES[field]:
+                raise ValueError(value)
+            if not out:
+                raise ValueError(value)
+            return out
         return typ(value)
     except (InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError(f"Invalid value for {field!r}: {value!r}") from exc
