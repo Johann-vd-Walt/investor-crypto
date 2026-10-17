@@ -456,6 +456,8 @@ def tick(db: Session) -> dict:
 
     max_open = max(1, settings.max_open_positions)
     n_open = len(held)
+    if not settings.bot_trade_signals:
+        sigs = []  # signal trading paused: manage/exit existing positions only
     for s in sigs:
         if s.id in acted or s.security_id in held or n_open >= max_open:
             if n_open >= max_open:
@@ -474,6 +476,12 @@ def tick(db: Session) -> dict:
             # Never deploy 100% of cash: keep a USDT reserve so the round-trip
             # fees are always covered and the account is never left stranded.
             spend = min(st.max_order_usd, daily_left, st.cash * (Decimal(1) - _LIVE_CASH_RESERVE))
+            # Risk rule: size so that hitting the stop loses ~risk_per_trade_pct
+            # of the real account, not a flat max_order regardless of stop width.
+            if s.suggested_stop is not None and Decimal(0) < s.suggested_stop < px:
+                stop_frac = (px - s.suggested_stop) / px
+                risk_budget = equity_est * (settings.risk_per_trade_pct / Decimal(100))
+                spend = min(spend, risk_budget / stop_frac)
             if spend < _MIN_POSITION_USD:
                 summary["skipped"] += 1
                 continue

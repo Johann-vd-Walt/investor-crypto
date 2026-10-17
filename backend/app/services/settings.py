@@ -51,6 +51,7 @@ TUNABLE: dict[str, type] = {
     "dip_atr_stop_multiple": Decimal,
     "luno_only_universe": bool,
     # Accumulation (recurring buy).
+    "bot_trade_signals": bool,
     "dca_enabled": bool,
     "dca_ticker": str,
     "dca_amount_usd": Decimal,

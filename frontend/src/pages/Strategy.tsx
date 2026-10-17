@@ -64,6 +64,7 @@ const META: Partial<Record<FieldKey, FieldMeta>> = {
   dip_horizon_days: { label: 'Dip-entry hold (days, 0 = normal)', step: '1' },
   dip_atr_stop_multiple: { label: 'Dip-entry ATR stop multiple', step: '0.25' },
   luno_only_universe: { label: 'Only coins tradeable on Luno', kind: 'bool' },
+  bot_trade_signals: { label: 'Bot opens trades from signals', kind: 'bool' },
   dca_enabled: { label: 'Accumulation on', kind: 'bool' },
   dca_ticker: { label: 'Coin (e.g. BTCUSDT)', kind: 'text' },
   dca_amount_usd: { label: 'Amount per buy (USDT)', step: '5' },
@@ -217,9 +218,11 @@ const SECTIONS: Section[] = [
         <p>The same safety rails apply: paper by default, the dry-run switch, and the per-order and
         daily caps on the Bot page. The amount per buy is clipped to those caps. It only runs while
         the bot is started.</p>
+        <p>Untick <strong>Bot opens trades from signals</strong> to run accumulation on its own: the bot
+        stops opening new signal trades but still manages and exits any it already holds.</p>
       </>
     ),
-    fields: ['dca_enabled', 'dca_ticker', 'dca_amount_usd', 'dca_interval_days', 'dca_min_drawdown_pct'],
+    fields: ['bot_trade_signals', 'dca_enabled', 'dca_ticker', 'dca_amount_usd', 'dca_interval_days', 'dca_min_drawdown_pct'],
   },
   {
     id: 'risk',

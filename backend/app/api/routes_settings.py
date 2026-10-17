@@ -53,6 +53,7 @@ class SettingsResponse(BaseModel):
     dip_horizon_days: int
     dip_atr_stop_multiple: float
     luno_only_universe: bool
+    bot_trade_signals: bool
     dca_enabled: bool
     dca_ticker: str
     dca_amount_usd: float
@@ -103,6 +104,7 @@ def _response(db: Session) -> SettingsResponse:
         dip_horizon_days=eff.dip_horizon_days,
         dip_atr_stop_multiple=float(eff.dip_atr_stop_multiple),
         luno_only_universe=eff.luno_only_universe,
+        bot_trade_signals=eff.bot_trade_signals,
         dca_enabled=eff.dca_enabled,
         dca_ticker=eff.dca_ticker,
         dca_amount_usd=float(eff.dca_amount_usd),

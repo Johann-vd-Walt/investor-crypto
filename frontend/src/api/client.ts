@@ -381,6 +381,7 @@ export interface AppSettings {
   dip_horizon_days: number
   dip_atr_stop_multiple: number
   luno_only_universe: boolean
+  bot_trade_signals: boolean
   dca_enabled: boolean
   dca_ticker: string
   dca_amount_usd: number

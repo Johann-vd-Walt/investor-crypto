@@ -157,6 +157,11 @@ class Settings(BaseSettings):
     # Restrict signals/backtests to coins Luno can actually trade in USDT.
     luno_only_universe: bool = Field(default=False, alias="LUNO_ONLY_UNIVERSE")
 
+    # Whether the bot opens NEW positions from strategy BUY signals. Off = the
+    # bot only manages/exits existing signal positions (and runs accumulation),
+    # e.g. to keep signals on paper evidence while live money only accumulates.
+    bot_trade_signals: bool = Field(default=True, alias="BOT_TRADE_SIGNALS")
+
     # --- Accumulation (recurring buy, executed by the bot) — OFF by default ---
     # Buys ``dca_amount_usd`` of ``dca_ticker`` every ``dca_interval_days``, only
     # while price is at least ``dca_min_drawdown_pct`` below its 365-day high
